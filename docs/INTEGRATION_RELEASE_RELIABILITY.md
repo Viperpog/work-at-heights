@@ -132,6 +132,23 @@ Expected deliberately failed chat IPC messages appear during the Electron smoke,
 
 `npm ci` continues to report 23 dependency advisories (6 moderate, 16 high, 1 critical); remediation remains outside this task's no-upgrade scope.
 
+## Manual packaging validation follow-up
+
+Executed the dispatch-enabled workflow on commit `b58617b` before merging: [run 39062311947](https://github.com/agsiqueira/work-at-heights/actions/runs/39062311947). This supersedes the initial packaging-unverified status above for **build generation only**, not installer execution or signing.
+
+- `actionlint` 1.7.12 passed for the release/reusable test workflows, including GitHub Actions expressions. The standalone validator was checksum-verified and kept in a temporary directory; no project dependency was changed.
+- Local regression suite: **47 passed, 0 failed**. Isolated Electron smoke: **15 passed, 0 failed**.
+- The manual run's reusable Node 20/24 test jobs and all three packaging jobs passed. **publish was skipped**. No tag or GitHub Release was created.
+- Downloaded the three Actions ZIPs into a temporary inspection directory, verified their SHA-256 against GitHub artifact digests, and inspected ZIP directories without extracting/executing installers.
+
+| Platform | Installer confirmed in ZIP | Actions artifact | Result |
+|---|---|---|---|
+| Windows x64 NSIS | `Working at Height Learning Track Setup 0.7.0.exe` | [installers-windows](https://github.com/agsiqueira/work-at-heights/actions/runs/39062311947/artifacts/12112011943) | Build/upload/checksum passed |
+| macOS Intel x64 DMG | `Working at Height Learning Track-0.7.0.dmg` | [installers-mac-intel](https://github.com/agsiqueira/work-at-heights/actions/runs/39062311947/artifacts/12111942366) | Build/upload/checksum passed |
+| macOS ARM64 DMG | `Working at Height Learning Track-0.7.0-arm64.dmg` | [installers-mac-arm](https://github.com/agsiqueira/work-at-heights/actions/runs/39062311947/artifacts/12111358365) | Build/upload/checksum passed |
+
+Packaging warnings/limits: default Electron icon is used; macOS code signing was explicitly skipped and notarization was not configured/tested. Dependency/action-runtime deprecation warnings remain. No installer was installed/launched, and installer binary signatures were not independently checked. No application behavior, dependency, Worker deployment or PR merge occurred in this follow-up.
+
 ## Developer checklist
 
 ```powershell
