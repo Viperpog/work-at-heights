@@ -135,7 +135,39 @@ Contract tests exercise repository Workers with fake upstreams; no live external
 services, physical microphone, audible playback, native dialogs or browser launch
 are claimed verified. No test expectation or assessment algorithm was relaxed.
 
-Windows NSIS and macOS Intel/ARM DMG packaging results will be recorded after the
-manual packaging workflow finishes. Building an installer is not proof that it
+Local Windows x64 NSIS packaging passed with builder 26.15.3 and `--publish never`.
+The generated `Working at Height Learning Track Setup 0.7.0.exe` is 82,872,549 bytes
+and Authenticode status is `NotSigned`. ASAR inspection confirms both question banks,
+PapaParse and all required main/preload/renderer/security/HTML sources are present;
+shipped application sources match the workspace.
+
+The first CI run exposed a pre-existing smoke synchronization race: export controls
+could already be enabled before a save finished. A second race involved the
+existing 250ms email-triggered saved-session lookup resuming newly created progress
+midway through an unusually fast synthetic run. The harness now lets that initial
+lookup settle and waits for each actual export file; assertions and application
+behavior are unchanged. Consider the delayed self-resume interaction separately
+if it is observed with real rapid learner input. Local smoke passed after the fixes.
+Initial packaging runs stopped at the test gate and created no installers/releases.
+The corrected PR test run
+[39067386896](https://github.com/agsiqueira/work-at-heights/actions/runs/39067386896)
+passed both Node 22/24 jobs (58 Node tests and 22 Electron checks each). The final
+manual packaging run is
+[39067401896](https://github.com/agsiqueira/work-at-heights/actions/runs/39067401896)
+at `0c4cfe0`, with both reusable test jobs passed. All three packaging jobs passed;
+the `publish` job was **skipped**. Artifacts were verified through Actions metadata:
+
+| Platform | Result | Artifact (ZIP archive size) |
+| --- | --- | --- |
+| Windows x64 NSIS | Passed locally and in Actions | [installers-windows](https://github.com/agsiqueira/work-at-heights/actions/runs/39067401896/artifacts/12113354703), 82,872,607 bytes |
+| macOS Intel x64 DMG | Passed on macos-15-intel | [installers-mac-intel](https://github.com/agsiqueira/work-at-heights/actions/runs/39067401896/artifacts/12113373206), 107,916,864 bytes |
+| macOS ARM64 DMG | Passed on macos-15 | [installers-mac-arm](https://github.com/agsiqueira/work-at-heights/actions/runs/39067401896/artifacts/12113394444), 101,863,756 bytes |
+
+Mac builds disable signing identity discovery as in the existing workflow. No
+signing/notarization credentials were introduced. These are validation artifacts,
+not a published release. The final report-only commit does not change the tested
+dependency graph, application sources, harness or workflow.
+
+Building an installer is not proof that it
 installs, launches correctly, is signed/notarized or passes Gatekeeper/SmartScreen.
 No Worker deployment, release publication, tag or PR merge is authorized here.
