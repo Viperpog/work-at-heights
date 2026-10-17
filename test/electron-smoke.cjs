@@ -50,6 +50,7 @@ app.whenReady().then(async () => {
     await wait("typeof state !== 'undefined' && questionBank.length === 240 && finalQuizBank.length === 240 && document.querySelectorAll('.instructorCard').length > 0");
     await js("window.__smokeErrors=[]; window.addEventListener('error', e=>window.__smokeErrors.push(e.message)); window.addEventListener('unhandledrejection', e=>window.__smokeErrors.push(String(e.reason))); window.alert=()=>{}; window.confirm=()=>true; void 0");
     check('real main/preload/renderer initialize and both banks load');
+    check('renderer receives learning settings only, without service configuration', await js("Object.keys(config).sort().join(',')==='maxTokens,useLocalFallbackWhenApiFails'"));
     check('all initial images load', await js("[...document.images].every(i=>i.complete && i.naturalWidth>0)"));
     await js("$('beginTrack').click(); $('studentName').value='Synthetic Learner'; $('studentEmail').value='smoke@example.invalid'; $('studentEmail').dispatchEvent(new Event('input')); $('openSmartChats').click(); $('completeLearning').click()");
     await wait('state.currentTab===2');
@@ -62,6 +63,9 @@ app.whenReady().then(async () => {
     await wait('state.smartchatsCompleted');
     check('real CSV File import and classification', await js("state.expertiseAfterSmartChats==='Basic' && state.smartQuestionCount===1"));
     await js("$('completeSmart').click(); $('startInterview').click(); $('answerBox').value='Synthetic answer without safety keywords'");
+    await js('config.useLocalFallbackWhenApiFails=false; handleAnswer(false)');
+    check('failed interview request retains answer/question and reenables controls', await js("!$('submitAnswer').disabled && !$('skipAnswer').disabled && state.interview.history.length===0 && $('answerBox').value==='Synthetic answer without safety keywords'"));
+    await js('config.useLocalFallbackWhenApiFails=true');
     await js('handleAnswer(false)');
     let count = 0;
     while (!(await js('state.interviewCompleted'))) {

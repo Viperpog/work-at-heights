@@ -231,6 +231,7 @@ const voiceState = {
   supportedNaturalSpeech: false,
   currentAudio: null,
   currentAudioUrl: null,
+  finishPlayback: null,
   speechRequestId: 0,
   mode: 'interview'
 };
@@ -308,6 +309,7 @@ function refreshVoiceControls() {
 
 function cancelInterviewerSpeech() {
   setVoiceWaitIndicator(false);
+  if (voiceState.finishPlayback) voiceState.finishPlayback();
   voiceState.speechRequestId += 1;
   if (voiceState.currentAudio) {
     try { voiceState.currentAudio.pause(); } catch (_) {}
@@ -355,6 +357,22 @@ async function playNaturalInterviewerVoice(text, requestId) {
     }
   };
   await new Promise((resolve, reject) => {
+    let finished = false;
+    const finish = (error) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      if (voiceState.finishPlayback === finish) voiceState.finishPlayback = null;
+      audio.pause();
+      if (voiceState.currentAudio === audio) voiceState.currentAudio = null;
+      if (voiceState.currentAudioUrl === url) {
+        URL.revokeObjectURL(url);
+        voiceState.currentAudioUrl = null;
+      }
+      if (error) reject(error); else resolve();
+    };
+    const timer = setTimeout(() => finish(new Error('Voice playback timed out.')), 180000);
+    voiceState.finishPlayback = finish;
     audio.onended = () => {
       if (voiceState.currentAudio === audio) voiceState.currentAudio = null;
       if (voiceState.currentAudioUrl === url) {
@@ -367,16 +385,16 @@ async function playNaturalInterviewerVoice(text, requestId) {
           ? 'Voice debriefing enabled. Press the microphone once to answer by voice.'
           : 'Voice interview enabled. Press the microphone once to answer by voice.');
       }
-      resolve();
+      finish();
     };
     audio.onerror = () => {
       if (requestId === voiceState.speechRequestId) {
         setVoiceWaitIndicator(false);
         updateVoiceStatus('Natural voice playback failed. Falling back to system voice.');
       }
-      reject(new Error('Natural voice playback failed.'));
+      finish(new Error('Natural voice playback failed.'));
     };
-    audio.play().catch(reject);
+    audio.play().catch(() => finish(new Error('Natural voice playback failed.')));
   });
 }
 
@@ -390,9 +408,17 @@ function speakWithSystemVoice(text) {
   utterance.rate = instructor.id === 'carlos' ? 0.88 : instructor.id === 'beatrice' ? 0.9 : instructor.id === 'emily' ? 0.94 : 0.98;
   utterance.pitch = instructor.id === 'carlos' ? 0.86 : instructor.id === 'beatrice' ? 1.03 : instructor.id === 'emily' ? 1.08 : 1.01;
   return new Promise(resolve => {
-    utterance.onend = resolve;
-    utterance.onerror = resolve;
-    window.speechSynthesis.speak(utterance);
+    let timer;
+    const finish = () => {
+      clearTimeout(timer);
+      if (voiceState.finishPlayback === finish) voiceState.finishPlayback = null;
+      resolve();
+    };
+    timer = setTimeout(() => { try { window.speechSynthesis.cancel(); } finally { finish(); } }, 180000);
+    voiceState.finishPlayback = finish;
+    utterance.onend = finish;
+    utterance.onerror = finish;
+    try { window.speechSynthesis.speak(utterance); } catch (_) { finish(); }
   });
 }
 
@@ -405,7 +431,7 @@ async function speakInterviewer(text) {
       await playNaturalInterviewerVoice(text, requestId);
       return;
     } catch (err) {
-      console.error(err);
+      console.warn('Voice operation failed.');
       setVoiceWaitIndicator(false);
       updateVoiceStatus('Natural voice failed. Falling back to system voice for this prompt.');
     }
@@ -712,8 +738,8 @@ async function startVoiceRecording() {
       try {
         await transcribeVoiceBlob(audioBlob);
       } catch (err) {
-        console.error(err);
-        updateVoiceStatus(`Transcription failed: ${err.message || err}. Type your answer or try the microphone again.`);
+        console.warn('Voice operation failed.');
+        updateVoiceStatus('Transcription failed. Type your answer or try the microphone again.');
         if (voiceState.mode === 'debrief') {
           if ($('submitDebriefAnswer')) $('submitDebriefAnswer').disabled = false;
         } else {
@@ -723,6 +749,12 @@ async function startVoiceRecording() {
       } finally {
         voiceState.transcribing = false;
         refreshVoiceControls();
+        if (voiceState.mode === 'debrief' && !state.debriefingCompleted) {
+          if ($('submitDebriefAnswer')) $('submitDebriefAnswer').disabled = false;
+        } else if (voiceState.mode !== 'debrief' && !state.interviewCompleted) {
+          if ($('submitAnswer')) $('submitAnswer').disabled = false;
+          if ($('skipAnswer')) $('skipAnswer').disabled = false;
+        }
       }
     };
 
@@ -747,7 +779,7 @@ async function startVoiceRecording() {
       }
     }, maxRecordingMs);
   } catch (err) {
-    console.error(err);
+    console.warn('Voice operation failed.');
     if (voiceState.mode === 'debrief') updateDebriefVoiceStatus('Microphone access failed. Allow microphone permission in the app/system settings, or type your reflection.'); else updateVoiceStatus('Microphone access failed. Allow microphone permission in the app/system settings, or type your answer.');
     stopVoiceRecording();
     if (voiceState.mode === 'debrief') {
@@ -1392,25 +1424,20 @@ Learner answer: ${answer}`;
         ]
       });
       const parsed = extractJsonObject(content);
+      const evaluation = parsed && (parsed.evaluation || parsed);
+      if (!evaluation || typeof evaluation.score !== 'number' || !Number.isFinite(evaluation.score)
+        || !['Correct', 'Partially Correct', 'Incorrect', 'Skipped'].includes(evaluation.correctness)
+        || typeof evaluation.isCorrect !== 'boolean'
+        || ['positiveReinforcement', 'explanation', 'improvementGuidanceText', 'interviewerMessage'].some(key => evaluation[key] !== undefined && typeof evaluation[key] !== 'string')
+        || (parsed.nextInterviewerMessage !== undefined && typeof parsed.nextInterviewerMessage !== 'string')
+        || (evaluation.recommendations !== undefined && (!Array.isArray(evaluation.recommendations)
+          || evaluation.recommendations.some(r => !r || typeof r.module !== 'number' || typeof r.chapter !== 'string' || typeof r.topic !== 'string')))) {
+        throw new Error('Invalid interview evaluation response.');
+      }
       return normalizeEvaluation(parsed, question);
     }
 
-    if (!config.apiEndpoint || config.apiEndpoint.includes('YOUR-CLOUDFLARE-WORKER')) throw new Error('Worker URL not configured');
-    const res = await fetch(config.apiEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: [
-          { role: 'system', content: `You are ${instructor.name}, the selected Senior Safety Instructor for an NR-35 work-at-height learning track. ${instructor.systemStyle} Return valid JSON only. Do not include markdown.` },
-          { role: 'user', content: prompt }
-        ],
-        maxTokens: config.maxTokens || 1200
-      })
-    });
-    if (!res.ok) throw new Error(`API ${res.status}`);
-    const data = await res.json();
-    const parsed = extractJsonObject(data.content ?? data.result ?? data);
-    return normalizeEvaluation(parsed, question);
+    throw new Error('Chat service is unavailable. Restart the application and retry.');
   } catch (e) {
     if (config.useLocalFallbackWhenApiFails) {
       const ev = localEvaluate(question, answer, false);
@@ -1463,35 +1490,48 @@ async function handleAnswer(skipped=false) {
   $('submitAnswer').disabled = true; $('skipAnswer').disabled = true;
   setVoiceWaitIndicator(true, 'Analyzing answer...');
   updateVoiceStatus('Analyzing your answer...');
-  const evaluation = await evaluateWithApi(q, answer, skipped);
-  const feedbackText = evaluation.interviewerMessage || `${evaluation.positiveReinforcement}
+  try {
+    const evaluation = await evaluateWithApi(q, answer, skipped);
+    const feedbackText = evaluation.interviewerMessage || `${evaluation.positiveReinforcement}
 
 ${evaluation.explanation}
 
 ${evaluation.improvementGuidanceText || ''}`;
-  setVoiceWaitIndicator(false);
-  addMsg('interviewer', feedbackText, { speak: false });
-  state.interview.history.push({ question: q, answer, skipped, evaluation });
-  const next = advanceInterview(Boolean(evaluation.isCorrect), q.difficulty);
-  state.interview.currentModule = next.module; state.interview.currentLevel = next.level;
-  if (next.module > 8) {
-    speakInterviewer(feedbackText);
-    return finishInterview();
-  }
-  const nq = chooseQuestion(next.module, next.level);
-  state.interview.activeQuestion = nq;
-  saveSession();
-  const segueText = makeSegue(evaluation, nq);
+    setVoiceWaitIndicator(false);
+    addMsg('interviewer', feedbackText, { speak: false });
+    state.interview.history.push({ question: q, answer, skipped, evaluation });
+    const next = advanceInterview(Boolean(evaluation.isCorrect), q.difficulty);
+    state.interview.currentModule = next.module; state.interview.currentLevel = next.level;
+    if (next.module > 8) {
+      speakInterviewer(feedbackText);
+      return finishInterview();
+    }
+    const nq = chooseQuestion(next.module, next.level);
+    state.interview.activeQuestion = nq;
+    saveSession();
+    const segueText = makeSegue(evaluation, nq);
 
-  // Display the next prompt without triggering a second speech event.
-  // Otherwise speechSynthesis.cancel() inside speakInterviewer() can stop the feedback mid-sentence.
-  setTimeout(() => addMsg('interviewer', segueText, { speak: false }), 250);
+    // Display the next prompt without triggering a second speech event.
+    // Otherwise speechSynthesis.cancel() inside speakInterviewer() can stop the feedback mid-sentence.
+    setTimeout(() => addMsg('interviewer', segueText, { speak: false }), 250);
 
-  // Read the feedback and the next question as one uninterrupted turn.
-  speakInterviewer(`${feedbackText}
+    // Read the feedback and the next question as one uninterrupted turn.
+    speakInterviewer(`${feedbackText}
 
 ${segueText}`);
-  $('submitAnswer').disabled = false; $('skipAnswer').disabled = false;
+    $('submitAnswer').disabled = false; $('skipAnswer').disabled = false;
+  } catch (_) {
+    // Keep the current bank question and learner answer available for retry.
+    setVoiceWaitIndicator(false);
+    if (!skipped) $('answerBox').value = answer;
+    updateVoiceStatus('Unable to evaluate this answer. Please retry, or select I Don\'t Know.');
+    alert('Unable to evaluate this answer. Please retry, or select I Don\'t Know.');
+  } finally {
+    if (!state.interviewCompleted) {
+      $('submitAnswer').disabled = false;
+      $('skipAnswer').disabled = false;
+    }
+  }
 }
 
 
@@ -1736,6 +1776,11 @@ async function nextDebriefingMessage(userAnswer) {
     });
     const jsonText = content.match(/\{[\s\S]*\}/)?.[0] || content;
     const parsed = JSON.parse(jsonText);
+    if (!parsed || typeof parsed.message !== 'string' || !parsed.message.trim()
+      || typeof parsed.complete !== 'boolean' || typeof parsed.followUpAsked !== 'boolean'
+      || (parsed.summary !== undefined && typeof parsed.summary !== 'string')) {
+      throw new Error('Invalid debriefing response.');
+    }
     if (isFinalTurn) {
       parsed.complete = true;
       parsed.followUpAsked = false;
