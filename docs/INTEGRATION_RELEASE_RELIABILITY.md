@@ -1,5 +1,7 @@
 # Task 2: Integration and release reliability
 
+Historical Task 2 record. See [Task 4 dependency security](DEPENDENCY_SECURITY.md) for current Node requirements, dependency versions and packaging validation.
+
 This change is based on `main` after PR #1. It preserves the seven-stage workflow, assessment banks, difficulty/scoring functions, instructor personas, local evaluation policy, certificate rules, and README SmartChats/shared-login instructions. No dependencies were added or upgraded. No Workers, secrets, installers, or releases were deployed/published.
 
 ## Request architecture and compatibility

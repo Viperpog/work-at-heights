@@ -44,6 +44,13 @@ app.whenReady().then(async () => {
     assert.ok(condition, name);
     console.log(`PASS ${++passed}: ${name}`);
   };
+  const waitForExport = async file => {
+    const deadline = Date.now() + 10000;
+    while (!fs.existsSync(path.join(temporary, file))) {
+      if (Date.now() > deadline) throw new Error(`Timed out waiting for export: ${file}`);
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  };
   try {
     await new Promise(resolve => {
       if (!win.webContents.isLoading()) resolve();
@@ -76,6 +83,7 @@ app.whenReady().then(async () => {
     }
     output = 'interview.docx';
     await js("$('exportInterview').click()");
+    await waitForExport(output);
     await wait("!$('unlockQuiz').disabled");
     check('interview fallback/skips finish and report exports', fs.existsSync(path.join(temporary, output)));
     await js("$('unlockQuiz').click(); $('startQuiz').click()");
@@ -87,6 +95,7 @@ app.whenReady().then(async () => {
     check('adaptive quiz renders, scores, completes and includes Module 5 Expert', await js("state.expertiseAfterQuiz==='Expert' && state.quiz.module5ExpertEncountered"));
     output = 'quiz.docx';
     await js("$('exportQuiz').click()");
+    await waitForExport(output);
     await wait("!$('unlockVrAnalysis').disabled");
     await fs.promises.writeFile(path.join(temporary, 'vr.docx'), await Packer.toBuffer(new Document({ sections: [{ children: [new Paragraph('VR readiness: Intermediate'), new Paragraph('Synthetic VR report for testing only.')] }] })));
     await js("$('unlockVrAnalysis').click()");
@@ -97,6 +106,7 @@ app.whenReady().then(async () => {
     check('debrief fallback completes after four answers', await js('state.debriefingCompleted'));
     output = 'debrief.docx';
     await js("$('exportDebrief').click()");
+    await waitForExport(output);
     await wait("!$('continueCertificate').disabled");
     await js("$('continueCertificate').click()");
     output = 'certificate.docx';
