@@ -56,6 +56,12 @@ Exact implementation changes:
   downloader becomes `@electron/get@5.1.0`, with its maintained internal ZIP
   extractor 1.0.5 and associated Node types/env-paths/undici/semver tree. No unrelated
   dependency update or audit fix was performed.
+- Electron 44's npm entry point downloads its development binary on first use if
+  absent (`node_modules/electron/index.js`); `npm ci` alone does not prove it is
+  cached. This happened on the first smoke invocation and completed successfully.
+  Prepare a network/cache-accessible first launch before offline development;
+  `node .\node_modules\electron\install.js` explicitly prefetches it. Packaged apps
+  contain their runtime and do not use this npm downloader at startup.
 - Original 22-check smoke retains every assertion. One intermittently early image
   check now waits for image `complete` before still requiring positive natural
   width. This fixes an observed decoding race, not a missing-image regression.
@@ -85,6 +91,9 @@ remains 0.7.0. No database, infrastructure or framework migration is involved.
 - `npm run test:electron`: original **22 passed, 0 failed**, plus **4 passed,
   0 failed** targeted runtime/media checks. Actual process reported Electron
   **44.9.0**, Chromium **152.0.7977.167**, Node **24.22.0**.
+- [PR CI 39068569972](https://github.com/agsiqueira/work-at-heights/actions/runs/39068569972)
+  passed on Node 22 and 24: each installed from the lockfile and passed all 58 Node
+  tests, original 22 Electron checks and four targeted runtime/media checks.
 - Seven stages, SmartChats external-opening IPC, actual CSV import, actual Word
   libraries/import/export, fallback, reload restoration, certificate rejection,
   literal HTML handling, inline/network CSP rejection and privileged IPC remain
@@ -170,6 +179,23 @@ manual validation. A stable runtime still requires ongoing patch updates.
 Local Windows x64 NSIS packaging passed with Electron 44.9.0 and builder 26.15.3.
 Expected file: `Working at Height Learning Track Setup 0.7.0.exe`.
 Native packaged-runtime execution and required ASAR content comparisons passed.
-Cross-platform workflow results will be recorded after the manual run completes.
+Local installer Authenticode status is `NotSigned` (no signing credentials added).
+The [manual workflow](https://github.com/agsiqueira/work-at-heights/actions/runs/39068606904)
+used source/lockfile commit `37021c0`. Both reusable Node 22/24 test jobs and all
+three native builds/content/runtime validations/uploads **passed**. Publication
+was **skipped**. No tag or GitHub Release was created.
+
+| Target | Verified installer filename | Artifact ZIP bytes |
+| --- | --- | ---: |
+| Windows x64 NSIS | `Working at Height Learning Track Setup 0.7.0.exe` | [117,501,886](https://github.com/agsiqueira/work-at-heights/actions/runs/39068606904/artifacts/12114541551) |
+| macOS Intel x64 DMG | `Working at Height Learning Track-0.7.0.dmg` | [138,581,954](https://github.com/agsiqueira/work-at-heights/actions/runs/39068606904/artifacts/12114576574) |
+| macOS ARM64 DMG | `Working at Height Learning Track-0.7.0-arm64.dmg` | [134,765,439](https://github.com/agsiqueira/work-at-heights/actions/runs/39068606904/artifacts/12114088585) |
+
+Each packaged executable reported **44.9.0** when run in Node mode on its native
+runner. All required contents matched source bytes. Both Mac plists declared
+**13.0** and included `NSMicrophoneUsageDescription`; this metadata check is not
+verification of an actual hardware privacy prompt. Signing identity discovery was
+disabled under the existing workflow, and notarization was not performed. The
+final report-only commit does not change the tested source, dependencies or workflow.
 Building artifacts is not an installed-app or signing/notarization test. No
 production service, release, tag or merge is part of this task.
