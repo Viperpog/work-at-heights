@@ -75,7 +75,7 @@ for extreme content is not verified. Failed saves show a fixed recovery message.
 
 ## Verification
 
-Use Node 20 or 24 as covered by existing CI, then from PowerShell:
+Use Node 24 LTS (recommended), or Node 22.12+ as covered by current CI, then from PowerShell:
 
 ```powershell
 Set-Location 'D:\200 - WorkingatHeights\work-at-heights'
@@ -102,7 +102,7 @@ manual validation. Experimental fake-device microphone checks passed once but
 stalled on repeated Windows runs; they are excluded from the standard suite to
 avoid host-dependent failures. Production permission prompts were not verified.
 
-Dependencies and lockfile are unchanged. `npm ci` succeeded and reported 23 existing
+At the Task 3 baseline, dependencies and lockfile were unchanged. `npm ci` succeeded and reported 23 existing
 advisories (6 moderate, 16 high, 1 critical). Electron 31 and dependency security
-updates require a separate compatibility-tested task. No Worker deployment, release
+updates are assessed in [Task 4](DEPENDENCY_SECURITY.md). No Worker deployment, release
 publication or eligibility-policy change is part of this work.

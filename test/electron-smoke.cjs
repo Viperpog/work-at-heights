@@ -44,6 +44,13 @@ app.whenReady().then(async () => {
     assert.ok(condition, name);
     console.log(`PASS ${++passed}: ${name}`);
   };
+  const waitForExport = async file => {
+    const deadline = Date.now() + 10000;
+    while (!fs.existsSync(path.join(temporary, file))) {
+      if (Date.now() > deadline) throw new Error(`Timed out waiting for export: ${file}`);
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  };
   try {
     await new Promise(resolve => {
       if (!win.webContents.isLoading()) resolve();
@@ -54,7 +61,11 @@ app.whenReady().then(async () => {
     check('real main/preload/renderer initialize and both banks load');
     check('renderer receives learning settings only, without service configuration', await js("Object.keys(config).sort().join(',')==='maxTokens,useLocalFallbackWhenApiFails'"));
     check('all initial images load', await js("[...document.images].every(i=>i.complete && i.naturalWidth>0)"));
-    await js("$('beginTrack').click(); $('studentName').value='Synthetic Learner'; $('studentEmail').value='smoke@example.invalid'; $('studentEmail').dispatchEvent(new Event('input')); $('openSmartChats').click(); $('completeLearning').click()");
+    await js("$('beginTrack').click(); $('studentName').value='Synthetic Learner'; $('studentEmail').value='smoke@example.invalid'; $('studentEmail').dispatchEvent(new Event('input'))");
+    // Let the existing 250ms saved-session lookup finish before this synthetic
+    // learner creates a new session; otherwise it can resume its own rapid run.
+    await js('new Promise(resolve=>setTimeout(resolve,300))');
+    await js("$('openSmartChats').click(); $('completeLearning').click()");
     await wait('state.currentTab===2');
     check('orientation/navigation and SmartChats launch IPC', external.length === 1 && external[0].includes('smoke%40example.invalid'));
     await js(`{
@@ -76,6 +87,7 @@ app.whenReady().then(async () => {
     }
     output = 'interview.docx';
     await js("$('exportInterview').click()");
+    await waitForExport(output);
     await wait("!$('unlockQuiz').disabled");
     check('interview fallback/skips finish and report exports', fs.existsSync(path.join(temporary, output)));
     await js("$('unlockQuiz').click(); $('startQuiz').click()");
@@ -87,6 +99,7 @@ app.whenReady().then(async () => {
     check('adaptive quiz renders, scores, completes and includes Module 5 Expert', await js("state.expertiseAfterQuiz==='Expert' && state.quiz.module5ExpertEncountered"));
     output = 'quiz.docx';
     await js("$('exportQuiz').click()");
+    await waitForExport(output);
     await wait("!$('unlockVrAnalysis').disabled");
     await fs.promises.writeFile(path.join(temporary, 'vr.docx'), await Packer.toBuffer(new Document({ sections: [{ children: [new Paragraph('VR readiness: Intermediate'), new Paragraph('Synthetic VR report for testing only.')] }] })));
     await js("$('unlockVrAnalysis').click()");
@@ -97,6 +110,7 @@ app.whenReady().then(async () => {
     check('debrief fallback completes after four answers', await js('state.debriefingCompleted'));
     output = 'debrief.docx';
     await js("$('exportDebrief').click()");
+    await waitForExport(output);
     await wait("!$('continueCertificate').disabled");
     await js("$('continueCertificate').click()");
     output = 'certificate.docx';
