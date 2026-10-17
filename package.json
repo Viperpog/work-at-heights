@@ -10,7 +10,7 @@
   },
   "scripts": {
     "test": "node --test test/baseline.test.cjs test/reliability.test.cjs test/security.test.cjs",
-    "test:electron": "electron test/electron-smoke.cjs",
+    "test:electron": "electron test/electron-smoke.cjs && electron test/runtime-compatibility.cjs",
     "start": "electron .",
     "dist:win": "electron-builder --win nsis --x64"
   },
@@ -21,7 +21,7 @@
     "papaparse": "^5.7.0"
   },
   "devDependencies": {
-    "electron": "^31.7.7",
+    "electron": "44.9.0",
     "electron-builder": "26.15.3"
   },
   "build": {
