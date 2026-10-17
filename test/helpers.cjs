@@ -36,7 +36,7 @@ function renderer(api = {}) {
       setItem: (key, value) => storage.set(key, value),
       removeItem: key => storage.delete(key)
     },
-    alert() {}, setTimeout: () => 0, clearTimeout() {},
+    alert() {}, performance, setTimeout: () => 0, clearTimeout() {},
     fetch: () => { throw new Error('Unexpected network request in unit test'); }
   });
   const source = fs.readFileSync(path.join(root, 'src/renderer.js'), 'utf8');

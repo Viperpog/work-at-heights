@@ -139,7 +139,7 @@ test('malformed AI evaluation/debrief shapes follow existing local fallback', as
 test('empty transcription and transcription failure release recording controls in both modes', async () => {
   for (const mode of ['interview', 'debrief']) for (const fail of [false, true]) {
     const h = renderer({ transcribeAudio: async () => { if (fail) throw new Error('Synthetic failure'); return { text: '' }; } });
-    h.context.navigator = { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [] }) } };
+    h.context.navigator = { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [], getAudioTracks: () => [] }) } };
     h.context.Blob = Blob;
     h.context.MediaRecorder = class { start() {} stop() {} };
     h.context.FileReader = class {

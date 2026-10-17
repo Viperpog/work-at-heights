@@ -1,0 +1,2 @@
+body { font: 17px system-ui, sans-serif; max-width: 880px; margin: 24px auto; padding: 0 20px; color: #172936; background: #f5f8fa; }
+button, select { font: inherit; padding: 9px; margin: 4px; } pre { white-space: pre-wrap; overflow-wrap: anywhere; background: white; padding: 14px; } audio { width: 100%; }

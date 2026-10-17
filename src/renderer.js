@@ -274,6 +274,7 @@ const voiceState = {
   currentAudioUrl: null,
   finishPlayback: null,
   speechRequestId: 0,
+  recordingRequestId: 0,
   mode: 'interview'
 };
 
@@ -314,6 +315,7 @@ function setVoiceWaitIndicator(active, message = 'Preparing voice...') {
 }
 
 function refreshVoiceControls() {
+  refreshMicrophoneControls();
   if ($('toggleVoiceMode')) {
     $('toggleVoiceMode').textContent = voiceState.enabled ? 'Disable Voice Interview' : 'Enable Voice Interview';
     $('toggleVoiceMode').classList.toggle('active', voiceState.enabled);
@@ -327,8 +329,8 @@ function refreshVoiceControls() {
     $('voiceAnswer').disabled = !voiceState.supportedRecording || voiceState.transcribing;
     $('voiceAnswer').replaceChildren(textNode('span', '🎙️', 'micIcon'), textNode('span', 'Record voice answer', 'srOnly'));
     $('voiceAnswer').firstChild.setAttribute('aria-hidden', 'true');
-    $('voiceAnswer').setAttribute('aria-label', voiceState.recording ? 'Recording voice answer' : 'Record voice answer');
-    $('voiceAnswer').title = voiceState.recording ? 'Recording. You can click to stop early.' : 'Record voice answer';
+    $('voiceAnswer').setAttribute('aria-label', voiceState.recording ? 'Stop recording early' : 'Record voice answer');
+    $('voiceAnswer').title = voiceState.recording ? 'Listening; stops after you finish. Click to stop early.' : 'Record voice answer';
     $('voiceAnswer').classList.toggle('active', voiceState.recording && voiceState.mode === 'interview');
   }
   if ($('toggleDebriefVoiceMode')) {
@@ -344,13 +346,20 @@ function refreshVoiceControls() {
     $('debriefVoiceAnswer').disabled = !voiceState.supportedRecording || voiceState.transcribing;
     $('debriefVoiceAnswer').replaceChildren(textNode('span', '🎙️', 'micIcon'), textNode('span', 'Record voice reflection', 'srOnly'));
     $('debriefVoiceAnswer').firstChild.setAttribute('aria-hidden', 'true');
-    $('debriefVoiceAnswer').setAttribute('aria-label', voiceState.recording ? 'Recording voice reflection' : 'Record voice reflection');
-    $('debriefVoiceAnswer').title = voiceState.recording ? 'Recording. You can click to stop early.' : 'Record voice reflection';
+    $('debriefVoiceAnswer').setAttribute('aria-label', voiceState.recording ? 'Stop recording early' : 'Record voice reflection');
+    $('debriefVoiceAnswer').title = voiceState.recording ? 'Listening; stops after you finish. Click to stop early.' : 'Record voice reflection';
     $('debriefVoiceAnswer').classList.toggle('active', voiceState.recording && voiceState.mode === 'debrief');
   }
 }
 
-function cancelInterviewerSpeech() {
+function audioTrace(event, details = {}) {
+  if (config?.audioDiagnostics === true) console.info('[WAH audio]', { event, timeMs: Math.round(performance.now()), requestId: voiceState.speechRequestId, phase: voiceState.audioPhase || 'idle', ...details });
+}
+function audioPhase(phase) { voiceState.audioPhase = phase; audioTrace('state'); }
+function cancelInterviewerSpeech(reason = 'user action') {
+  audioTrace('playback canceled', { reason });
+  voiceState.pendingSpeechText = null;
+  audioPhase('idle');
   setVoiceWaitIndicator(false);
   if (voiceState.finishPlayback) voiceState.finishPlayback();
   voiceState.speechRequestId += 1;
@@ -375,6 +384,7 @@ function base64ToBlob(base64, mimeType) {
 }
 
 async function playNaturalInterviewerVoice(text, requestId) {
+  audioPhase('preparing'); audioTrace('synthesis requested');
   setVoiceWaitIndicator(true, 'Preparing interviewer voice...');
   updateVoiceStatus('Preparing interviewer voice...');
   const instructor = getSelectedInstructor();
@@ -384,17 +394,17 @@ async function playNaturalInterviewerVoice(text, requestId) {
     model: 'gpt-4o-mini-tts',
     instructions: instructor.ttsInstructions || 'Speak naturally as a warm, experienced senior safety instructor. Use a clear professional tone, moderate pace, supportive intonation, and avoid sounding robotic.'
   });
-  if (requestId !== voiceState.speechRequestId || !result || !result.audioBase64) {
-    setVoiceWaitIndicator(false);
-    return;
-  }
+  if (requestId !== voiceState.speechRequestId) { audioTrace('obsolete synthesis ignored', { obsoleteRequestId: requestId }); return; }
+  if (!result || !result.audioBase64) throw new Error('Missing voice audio.');
   const blob = base64ToBlob(result.audioBase64, result.mimeType || 'audio/mpeg');
   const url = URL.createObjectURL(blob);
   voiceState.currentAudioUrl = url;
   const audio = new Audio(url);
   voiceState.currentAudio = audio;
   audio.onplay = () => {
+    if (requestId !== voiceState.speechRequestId) { audio.pause(); return; }
     if (requestId === voiceState.speechRequestId) {
+      audioPhase('speaking'); audioTrace('playback start', { durationSeconds: Number.isFinite(audio.duration) ? audio.duration : 0 });
       setVoiceWaitIndicator(true, 'Interviewer speaking...');
       updateVoiceStatus('Interviewer speaking...');
     }
@@ -404,6 +414,7 @@ async function playNaturalInterviewerVoice(text, requestId) {
     const finish = (error) => {
       if (finished) return;
       finished = true;
+      audio.onpause = null;
       clearTimeout(timer);
       if (voiceState.finishPlayback === finish) voiceState.finishPlayback = null;
       audio.pause();
@@ -416,7 +427,9 @@ async function playNaturalInterviewerVoice(text, requestId) {
     };
     const timer = setTimeout(() => finish(new Error('Voice playback timed out.')), 180000);
     voiceState.finishPlayback = finish;
+    audio.onpause = () => { if (!finished && !audio.ended) audioTrace('unexpected pause', { elapsedSeconds: audio.currentTime, durationSeconds: Number.isFinite(audio.duration) ? audio.duration : 0 }); };
     audio.onended = () => {
+      audioTrace('playback complete', { elapsedSeconds: audio.currentTime });
       if (voiceState.currentAudio === audio) voiceState.currentAudio = null;
       if (voiceState.currentAudioUrl === url) {
         URL.revokeObjectURL(url);
@@ -425,12 +438,14 @@ async function playNaturalInterviewerVoice(text, requestId) {
       if (requestId === voiceState.speechRequestId) {
         setVoiceWaitIndicator(false);
         updateVoiceStatus(voiceState.mode === 'debrief'
-          ? 'Voice debriefing enabled. Press the microphone once to answer by voice.'
-          : 'Voice interview enabled. Press the microphone once to answer by voice.');
+          ? 'Voice debriefing enabled. Press the microphone once; your answer is sent after you finish speaking.'
+          : 'Voice interview enabled. Press the microphone once; your answer is sent after you finish speaking.');
       }
       finish();
     };
     audio.onerror = () => {
+      audioPhase('error');
+      audioTrace('playback error');
       if (requestId === voiceState.speechRequestId) {
         setVoiceWaitIndicator(false);
         updateVoiceStatus('Natural voice playback failed. Falling back to system voice.');
@@ -442,6 +457,7 @@ async function playNaturalInterviewerVoice(text, requestId) {
 }
 
 function speakWithSystemVoice(text) {
+  audioPhase('speaking'); audioTrace('system playback start');
   setVoiceWaitIndicator(false);
   if (!voiceState.supportedSpeech) return Promise.resolve();
   try { window.speechSynthesis.cancel(); } catch (_) {}
@@ -451,35 +467,42 @@ function speakWithSystemVoice(text) {
   utterance.rate = instructor.id === 'carlos' ? 0.88 : instructor.id === 'beatrice' ? 0.9 : instructor.id === 'emily' ? 0.94 : 0.98;
   utterance.pitch = instructor.id === 'carlos' ? 0.86 : instructor.id === 'beatrice' ? 1.03 : instructor.id === 'emily' ? 1.08 : 1.01;
   return new Promise(resolve => {
-    let timer;
+    let timer, finished = false;
     const finish = () => {
+      if (finished) return; finished = true;
       clearTimeout(timer);
       if (voiceState.finishPlayback === finish) voiceState.finishPlayback = null;
       resolve();
     };
     timer = setTimeout(() => { try { window.speechSynthesis.cancel(); } finally { finish(); } }, 180000);
     voiceState.finishPlayback = finish;
-    utterance.onend = finish;
-    utterance.onerror = finish;
+    utterance.onend = () => { audioTrace('system playback complete'); finish(); };
+    utterance.onerror = () => { audioTrace('system playback error'); finish(); };
     try { window.speechSynthesis.speak(utterance); } catch (_) { finish(); }
   });
 }
 
 async function speakInterviewer(text) {
   if (!voiceState.enabled || voiceState.muted) return;
-  cancelInterviewerSpeech();
+  if (voiceState.recording || microphoneState.local || microphoneState.busy) { audioTrace('playback suppressed during capture'); return; }
+  if (voiceState.pendingSpeechText === text && voiceState.pendingSpeechMode === voiceState.mode) { audioTrace('repeated synthesis suppressed'); return; }
+  cancelInterviewerSpeech('new prompt');
   const requestId = voiceState.speechRequestId;
+  voiceState.pendingSpeechText = text; voiceState.pendingSpeechMode = voiceState.mode;
+  try {
   if (voiceState.supportedNaturalSpeech) {
     try {
       await playNaturalInterviewerVoice(text, requestId);
       return;
     } catch (err) {
+      if (requestId !== voiceState.speechRequestId) return;
       console.warn('Voice operation failed.');
       setVoiceWaitIndicator(false);
       updateVoiceStatus('Natural voice failed. Falling back to system voice for this prompt.');
     }
   }
-  if (requestId === voiceState.speechRequestId) return speakWithSystemVoice(text);
+  if (requestId === voiceState.speechRequestId) return await speakWithSystemVoice(text);
+  } finally { if (requestId === voiceState.speechRequestId) { voiceState.pendingSpeechText = null; audioPhase('idle'); } }
 }
 
 function getCurrentInterviewerText() {
@@ -518,10 +541,10 @@ function toggleDebriefVoiceMode() {
   voiceState.enabled = !voiceState.enabled;
   if (!voiceState.enabled) {
     cancelInterviewerSpeech();
-    stopVoiceRecording();
+    cancelVoiceRecording();
   }
   updateDebriefVoiceStatus(voiceState.enabled
-    ? 'Voice debriefing enabled. The facilitator will read the current prompt aloud. Press the microphone once to answer by voice.'
+    ? 'Voice debriefing enabled. Press the microphone once; your answer is sent after you finish speaking.'
     : 'Voice debriefing disabled. Text reflection remains available.');
   refreshVoiceControls();
   if (voiceState.enabled) {
@@ -533,7 +556,7 @@ function toggleDebriefVoiceMode() {
 function toggleDebriefFacilitatorMute() {
   voiceState.mode = 'debrief';
   voiceState.muted = !voiceState.muted;
-  if (voiceState.muted) cancelInterviewerSpeech();
+  if (voiceState.muted) cancelInterviewerSpeech('muted');
   updateDebriefVoiceStatus(voiceState.muted ? 'Facilitator muted. Text prompts will still appear in the debriefing chat.' : 'Facilitator unmuted. New debriefing prompts will be spoken aloud.');
   refreshVoiceControls();
 }
@@ -543,6 +566,137 @@ async function toggleDebriefVoiceAnswer() {
   await toggleVoiceAnswer();
 }
 
+// Device IDs remain local, separate from learner sessions and provider payloads.
+const microphoneState = { deviceId: '', inputs: [], busy: false, local: null, url: null, request: 0, ready: false };
+const microphonePreferenceKey = 'wah.microphoneDeviceId';
+function microphoneMessage(text) {
+  if ($('audioMicrophoneStatus')) $('audioMicrophoneStatus').textContent = text;
+}
+function microphoneError(error) {
+  if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') return 'Microphone permission denied. Allow microphone access in Windows privacy settings, or continue typing.';
+  if (['NotFoundError', 'OverconstrainedError', 'NotReadableError'].includes(error?.name)) return 'Selected microphone is unavailable, disconnected, or in use. Reconnect it or choose another microphone. No other microphone was selected automatically.';
+  return 'Microphone recording failed. Check your microphone, try Test microphone, or continue typing.';
+}
+function refreshMicrophoneControls() {
+  if (!microphoneState.ready) return;
+  const locked = !voiceState.supportedRecording || microphoneState.busy || !!microphoneState.local || voiceState.recording || voiceState.transcribing;
+  for (const prefix of ['audio']) {
+    const select = $(prefix + 'Microphone'); if (!select) continue;
+    select.replaceChildren(new Option('System default' + (microphoneState.inputs.find(input => input.deviceId === 'default')?.label ? ' — ' + microphoneState.inputs.find(input => input.deviceId === 'default').label : ''), ''));
+    for (const [index, input] of microphoneState.inputs.entries()) if (input.deviceId && input.deviceId !== 'default') select.append(new Option(input.label || `Microphone ${index + 1} (grant access to show name)`, input.deviceId));
+    if (microphoneState.deviceId && !microphoneState.inputs.some(input => input.deviceId === microphoneState.deviceId)) select.append(new Option('Saved microphone unavailable — reconnect or choose another', microphoneState.deviceId));
+    select.value = microphoneState.deviceId; select.disabled = locked;
+    $(prefix + 'MicrophoneRefresh').disabled = locked;
+    $(prefix + 'MicrophoneTest').disabled = locked;
+    $(prefix + 'MicrophoneStop').disabled = !microphoneState.local || microphoneState.local.stopping;
+  }
+}
+async function refreshMicrophones() {
+  try {
+    microphoneState.inputs = (await navigator.mediaDevices.enumerateDevices()).filter(device => device.kind === 'audioinput');
+    refreshMicrophoneControls();
+    if (microphoneState.deviceId && !microphoneState.inputs.some(input => input.deviceId === microphoneState.deviceId)) microphoneMessage('Saved microphone is unavailable. Reconnect it or choose another microphone; there is no automatic fallback.');
+  } catch (_) { microphoneMessage('Could not list microphones. Check microphone access or continue typing.'); }
+}
+function microphoneConstraints() {
+  return { audio: microphoneState.deviceId ? { deviceId: { exact: microphoneState.deviceId } } : true };
+}
+async function acquireMicrophone() {
+  const stream = await navigator.mediaDevices.getUserMedia(microphoneConstraints());
+  const settings = stream.getAudioTracks()[0]?.getSettings() || {};
+  audioTrace('capture acquired', { sampleRate: settings.sampleRate || 0, channels: settings.channelCount || 0,
+    echoCancellation: settings.echoCancellation, noiseSuppression: settings.noiseSuppression, autoGainControl: settings.autoGainControl });
+  const active = 'Microphone used: ' + (stream.getAudioTracks()[0]?.label || 'System default (name unavailable)');
+  if (microphoneState.ready) $('audioMicrophoneActive').textContent = active;
+  microphoneMessage('Microphone ready. Use Test microphone to check the sound.');
+  await refreshMicrophones();
+  return stream;
+}
+function clearLocalMicrophoneTest() {
+  microphoneState.request++;
+  const local = microphoneState.local; microphoneState.local = null;
+  if (local) {
+    local.discarded = true; clearTimeout(local.timer); cancelAnimationFrame(local.animation);
+    if (local.recorder.state === 'recording') local.recorder.stop();
+    local.stream.getTracks().forEach(track => track.stop()); local.context?.close().catch(() => {});
+  }
+  for (const prefix of ['audio']) {
+    const audio = microphoneState.ready && $(prefix + 'MicrophonePlayback'); if (audio) { audio.pause(); audio.removeAttribute('src'); audio.load(); }
+  }
+  if (microphoneState.url) URL.revokeObjectURL(microphoneState.url); microphoneState.url = null;
+  refreshMicrophoneControls();
+}
+async function startLocalMicrophoneTest() {
+  if (microphoneState.busy || microphoneState.local || voiceState.recording || voiceState.transcribing) return;
+  clearLocalMicrophoneTest(); cancelInterviewerSpeech('local microphone test');
+  const request = microphoneState.request; microphoneState.busy = true; refreshMicrophoneControls();
+  let stream, context;
+  try {
+    stream = await acquireMicrophone();
+    if (request !== microphoneState.request) { stream.getTracks().forEach(track => track.stop()); return; }
+    const type = getSupportedAudioMimeType(); const recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+    context = new AudioContext(); await context.resume();
+    if (request !== microphoneState.request) { stream.getTracks().forEach(track => track.stop()); await context.close(); return; }
+    const analyser = context.createAnalyser(); analyser.fftSize = 1024; context.createMediaStreamSource(stream).connect(analyser);
+    const local = { stream, recorder, context, chunks: [], peak: 0, discarded: false, stopping: false };
+    microphoneState.local = local;
+    const measure = () => { if (local.discarded || local.stopping) return; const data = new Uint8Array(analyser.fftSize); analyser.getByteTimeDomainData(data); for (const value of data) local.peak = Math.max(local.peak, Math.abs(value - 128)); local.animation = requestAnimationFrame(measure); }; measure();
+    recorder.ondataavailable = event => { if (!local.discarded && event.data.size) local.chunks.push(event.data); };
+    recorder.onstop = () => {
+      clearTimeout(local.timer); cancelAnimationFrame(local.animation); stream.getTracks().forEach(track => track.stop()); context.close().catch(() => {});
+      if (local.discarded) return;
+      microphoneState.local = null;
+      const blob = new Blob(local.chunks, { type: recorder.mimeType || type || 'audio/webm' });
+      microphoneState.url = URL.createObjectURL(blob);
+      $('audioMicrophonePlayback').src = microphoneState.url;
+      microphoneMessage(local.peak < 1 ? 'No detectable microphone input. Check the selected device and volume, then test again. Audio stayed local.' : 'Test recorded. Play it back to confirm your microphone. Audio stayed local; nothing was sent or submitted.');
+      refreshMicrophoneControls();
+    };
+    recorder.onerror = () => { clearLocalMicrophoneTest(); microphoneMessage('Microphone test recording failed. Choose a working microphone and try again.'); };
+    for (const track of stream.getAudioTracks()) track.addEventListener('ended', () => { if (local.discarded || microphoneState.local !== local) return; clearLocalMicrophoneTest(); microphoneMessage('Microphone disconnected. Reconnect it or choose another microphone.'); });
+    recorder.start(250); local.timer = setTimeout(stopLocalMicrophoneTest, 10000);
+    microphoneMessage('Local microphone test: say “The orange safety helmet is beside the blue ladder.” Press Stop test when finished (10-second limit).');
+  } catch (error) { stream?.getTracks().forEach(track => track.stop()); context?.close().catch(() => {}); if (request === microphoneState.request) microphoneMessage(microphoneError(error)); }
+  finally { microphoneState.busy = false; refreshMicrophoneControls(); }
+}
+function stopLocalMicrophoneTest() {
+  const local = microphoneState.local; if (!local || local.stopping) return;
+  local.stopping = true; if (local.recorder.state === 'recording') local.recorder.stop(); refreshMicrophoneControls();
+}
+function setupMicrophones() {
+  try { const saved = localStorage.getItem(microphonePreferenceKey); if (typeof saved === 'string' && saved.length <= 1024) microphoneState.deviceId = saved; } catch (_) { /* OS default when storage is unavailable. */ }
+  for (const prefix of ['audio']) {
+    const panel = document.createElement('div'); panel.className = 'microphoneSettings';
+    const label = document.createElement('label'); label.htmlFor = prefix + 'Microphone'; label.textContent = 'Your microphone';
+    const select = document.createElement('select'); select.id = label.htmlFor;
+    select.onchange = () => { const selected = select.value; clearLocalMicrophoneTest(); microphoneState.deviceId = selected; microphoneMessage('Microphone selected. Use Test microphone to check it.'); try { if (selected) localStorage.setItem(microphonePreferenceKey, selected); else localStorage.removeItem(microphonePreferenceKey); } catch (_) { microphoneMessage('Microphone selected for this session; preference could not be saved.'); } refreshMicrophoneControls(); };
+    panel.append(label, select);
+    const advanced = document.createElement('details'); const summary = document.createElement('summary'); summary.textContent = 'Advanced: test microphone'; advanced.append(summary);
+    for (const [suffix, text, action] of [['Refresh','Show / refresh microphones',async () => {
+      if (microphoneState.busy) return; microphoneState.busy = true; refreshMicrophoneControls(); let stream;
+      try { cancelInterviewerSpeech('microphone permission check'); stream = await acquireMicrophone(); } catch (error) { microphoneMessage(microphoneError(error)); } finally { stream?.getTracks().forEach(track => track.stop()); microphoneState.busy = false; refreshMicrophoneControls(); }
+    }], ['Test','Test microphone',startLocalMicrophoneTest], ['Stop','Stop test',stopLocalMicrophoneTest], ['Cancel','Discard test',() => { clearLocalMicrophoneTest(); microphoneMessage('Local microphone test discarded.'); }]]) {
+      const button = document.createElement('button'); button.id = prefix + 'Microphone' + suffix; button.type = 'button'; button.className = 'secondary'; button.textContent = text; button.onclick = action; advanced.append(button);
+    }
+    const status = document.createElement('p'); status.id = prefix + 'MicrophoneStatus'; status.className = 'hint'; status.setAttribute('role','status'); status.textContent = 'Choose a microphone or use System default. Test audio stays on this computer.';
+    const active = document.createElement('p'); active.id = prefix + 'MicrophoneActive'; active.className = 'hint'; active.textContent = 'Microphone used: not yet tested';
+    const playback = document.createElement('audio'); playback.id = prefix + 'MicrophonePlayback'; playback.controls = true; playback.setAttribute('aria-label','Local microphone test playback'); advanced.append(status, playback); panel.append(active, advanced);
+    $('audioSettingsContent').append(panel);
+  }
+  $('audioSettingsButton').onclick = () => { $('audioSettings').showModal(); refreshMicrophones(); };
+  $('closeAudioSettings').onclick = () => $('audioSettings').close();
+  $('audioSettings').addEventListener('close', () => { clearLocalMicrophoneTest(); $('audioSettingsButton').focus(); });
+  microphoneState.ready = true;
+  navigator.mediaDevices?.addEventListener('devicechange', async () => {
+    await refreshMicrophones();
+    if (microphoneState.deviceId && !microphoneState.inputs.some(input => input.deviceId === microphoneState.deviceId)) {
+      clearLocalMicrophoneTest();
+      if (voiceState.recording) { voiceState.microphoneError = 'Selected microphone disconnected. Reconnect it or choose another microphone.'; voiceState.audioChunks = []; voiceState.speechDetected = false; stopVoiceRecording(); }
+    }
+  });
+  if (navigator.mediaDevices?.enumerateDevices) refreshMicrophones();
+  window.addEventListener('beforeunload', clearLocalMicrophoneTest);
+}
 function setupVoiceFeatures() {
   voiceState.supportedSpeech = typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
   voiceState.supportedNaturalSpeech = Boolean(window.appApi && window.appApi.synthesizeSpeech);
@@ -551,8 +705,9 @@ function setupVoiceFeatures() {
     updateVoiceStatus('Voice recording is unavailable. Text entry remains available.');
   } else {
     if ($('voiceStatus')) $('voiceStatus').textContent = 'Voice is optional. Choose an instructor, press the microphone, and answer aloud.';
-    if ($('debriefVoiceStatus')) $('debriefVoiceStatus').textContent = 'Voice is optional. Press the microphone to record and submit your reflection.';
+    if ($('debriefVoiceStatus')) $('debriefVoiceStatus').textContent = 'Voice is optional. Press the microphone once; your reflection is sent after you finish speaking.';
   }
+  setupMicrophones();
   refreshVoiceControls();
 }
 
@@ -565,7 +720,7 @@ function toggleVoiceMode() {
   voiceState.enabled = !voiceState.enabled;
   if (!voiceState.enabled) {
     cancelInterviewerSpeech();
-    stopVoiceRecording();
+    cancelVoiceRecording();
   }
   updateVoiceStatus(voiceState.enabled
     ? 'Voice enabled. Press the microphone to answer aloud.'
@@ -580,7 +735,7 @@ function toggleVoiceMode() {
 function toggleInterviewerMute() {
   voiceState.mode = 'interview';
   voiceState.muted = !voiceState.muted;
-  if (voiceState.muted) cancelInterviewerSpeech();
+  if (voiceState.muted) cancelInterviewerSpeech('muted');
   updateVoiceStatus(voiceState.muted ? 'Interviewer muted. Text prompts will still appear in the chat.' : 'Interviewer unmuted. New interviewer prompts will be spoken aloud.');
   refreshVoiceControls();
 }
@@ -653,10 +808,12 @@ function closeVoiceAudioContext() {
 }
 
 function stopVoiceRecording() {
+  if (voiceState.recording) audioTrace('recording stop', { elapsedMs: Math.round(performance.now() - (voiceState.recordingStartedAt || performance.now())) });
   clearVoiceTimers();
   closeVoiceAudioContext();
   if (voiceState.mediaRecorder && voiceState.recording) {
-    try { voiceState.mediaRecorder.stop(); } catch (_) {}
+    voiceState.transcribing = true;
+    try { voiceState.mediaRecorder.stop(); } catch (_) { voiceState.transcribing = false; }
   }
   if (voiceState.mediaStream) {
     voiceState.mediaStream.getTracks().forEach(track => track.stop());
@@ -666,14 +823,19 @@ function stopVoiceRecording() {
   refreshVoiceControls();
 }
 
-function monitorSpeechAndAutoStop() {
+// Four seconds tolerates short thinking pauses; this is an audio boundary only,
+// unrelated to assessment scoring. Centralize timings for controlled tuning.
+const answerRecordingPolicy = Object.freeze({ speechRms: 10, minimumMs: 2000, silenceMs: 4000, noSpeechMs: 15000 });
+function cancelVoiceRecording() {
+  voiceState.recordingRequestId++;
+  voiceState.speechDetected = false; voiceState.audioChunks = [];
+  stopVoiceRecording();
+}
+function monitorSpeechSignal() {
   if (!voiceState.recording || !voiceState.analyser) return;
   const data = new Uint8Array(voiceState.analyser.fftSize);
-  let lastVoiceTime = Date.now();
-  const startedAt = Date.now();
-  const minRecordingMs = 1200;
-  const silenceAfterSpeechMs = 1500;
-  const speechThreshold = 10;
+  const startedAt = performance.now();
+  let lastVoiceAt = startedAt;
 
   const tick = () => {
     if (!voiceState.recording || !voiceState.analyser) return;
@@ -684,18 +846,17 @@ function monitorSpeechAndAutoStop() {
       sum += centered * centered;
     }
     const rms = Math.sqrt(sum / data.length);
-    const now = Date.now();
 
-    if (rms > speechThreshold) {
+    const now = performance.now();
+    if (rms > answerRecordingPolicy.speechRms) {
       voiceState.speechDetected = true;
-      lastVoiceTime = now;
-      if (voiceState.mode === 'debrief') updateDebriefVoiceStatus('Recording. Speak your reflection. I will submit it when you finish.'); else updateVoiceStatus('Recording. Speak your answer. I will submit it when you finish.');
+      lastVoiceAt = now;
+      if (voiceState.mode === 'debrief') updateDebriefVoiceStatus('Listening to your reflection. It will be sent after you finish speaking.'); else updateVoiceStatus('Listening to your answer. It will be sent after you finish speaking.');
     }
-
-    if (voiceState.speechDetected && now - startedAt > minRecordingMs && now - lastVoiceTime > silenceAfterSpeechMs) {
-      if (voiceState.mode === 'debrief') updateDebriefVoiceStatus('Detected a pause. Transcribing your reflection...'); else updateVoiceStatus('Detected a pause. Transcribing your answer...');
-      stopVoiceRecording();
-      return;
+    if (voiceState.speechDetected && now - startedAt >= answerRecordingPolicy.minimumMs && now - lastVoiceAt >= answerRecordingPolicy.silenceMs) {
+      audioTrace('speech ending detected');
+      if (voiceState.mode === 'debrief') updateDebriefVoiceStatus('Finished speaking. Transcribing your reflection...'); else updateVoiceStatus('Finished speaking. Transcribing your answer...');
+      stopVoiceRecording(); return;
     }
 
     voiceState.silenceCheckId = requestAnimationFrame(tick);
@@ -705,6 +866,11 @@ function monitorSpeechAndAutoStop() {
 }
 
 async function startVoiceRecording() {
+  if (voiceState.recording || voiceState.transcribing || microphoneState.busy || microphoneState.local) { microphoneMessage('Finish the current audio operation before recording another answer.'); return; }
+  if (voiceState.currentAudio || voiceState.audioPhase === 'speaking') audioTrace('capture/playback overlap prevented');
+  cancelInterviewerSpeech('answer recording');
+  const recordingRequest = ++voiceState.recordingRequestId;
+  microphoneState.busy = true; refreshMicrophoneControls(); voiceState.microphoneError = '';
   try {
     if (voiceState.mode === 'debrief') {
       if ($('submitDebriefAnswer')) $('submitDebriefAnswer').disabled = true;
@@ -713,8 +879,14 @@ async function startVoiceRecording() {
       if ($('skipAnswer')) $('skipAnswer').disabled = true;
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = await acquireMicrophone();
+    if (recordingRequest !== voiceState.recordingRequestId) { stream.getTracks().forEach(track => track.stop()); return; }
     voiceState.mediaStream = stream;
+    for (const track of stream.getAudioTracks()) track.addEventListener('ended', () => {
+      if (!voiceState.recording) return;
+      voiceState.microphoneError = 'Microphone disconnected. Reconnect it or choose another microphone.';
+      voiceState.audioChunks = []; voiceState.speechDetected = false; stopVoiceRecording();
+    });
     voiceState.audioChunks = [];
     voiceState.speechDetected = false;
 
@@ -752,6 +924,7 @@ async function startVoiceRecording() {
     };
 
     recorder.onstop = async () => {
+      audioPhase('transcribing');
       clearVoiceTimers();
       closeVoiceAudioContext();
       voiceState.recording = false;
@@ -762,10 +935,12 @@ async function startVoiceRecording() {
         voiceState.mediaStream = null;
       }
       if (!voiceState.audioChunks.length || !voiceState.speechDetected) {
+        audioPhase('idle');
         voiceState.audioChunks = [];
         voiceState.transcribing = false;
         refreshVoiceControls();
-        updateVoiceStatus('No clear speech was detected. Press the microphone and try again, or type your answer.');
+        const message = voiceState.microphoneError || 'No clear microphone input was detected. Check Your microphone and Test microphone, or type your answer.';
+        if (voiceState.mode === 'debrief') updateDebriefVoiceStatus(message); else updateVoiceStatus(message);
         if (voiceState.mode === 'debrief') {
           if ($('submitDebriefAnswer')) $('submitDebriefAnswer').disabled = false;
         } else {
@@ -782,7 +957,8 @@ async function startVoiceRecording() {
         await transcribeVoiceBlob(audioBlob);
       } catch (err) {
         console.warn('Voice operation failed.');
-        updateVoiceStatus('Transcription failed. Type your answer or try the microphone again.');
+        const message = 'Transcription service failed. Type your response or try again. Use Test microphone to check local audio.';
+        if (voiceState.mode === 'debrief') updateDebriefVoiceStatus(message); else updateVoiceStatus(message);
         if (voiceState.mode === 'debrief') {
           if ($('submitDebriefAnswer')) $('submitDebriefAnswer').disabled = false;
         } else {
@@ -790,6 +966,7 @@ async function startVoiceRecording() {
           if ($('skipAnswer')) $('skipAnswer').disabled = false;
         }
       } finally {
+        audioPhase('idle');
         voiceState.transcribing = false;
         refreshVoiceControls();
         if (voiceState.mode === 'debrief' && !state.debriefingCompleted) {
@@ -803,27 +980,29 @@ async function startVoiceRecording() {
 
     recorder.start(250);
     voiceState.recording = true;
+    voiceState.recordingStartedAt = performance.now();
+    audioPhase('recording'); audioTrace('recording start');
     refreshVoiceControls();
-    if (voiceState.mode === 'debrief') updateDebriefVoiceStatus('Recording. Speak your reflection. I will submit it when you finish.'); else updateVoiceStatus('Recording. Speak your answer. I will submit it when you finish.');
+    if (voiceState.mode === 'debrief') updateDebriefVoiceStatus('Listening. Speak your reflection; it will be sent after you finish.'); else updateVoiceStatus('Listening. Speak your answer; it will be sent after you finish.');
 
-    monitorSpeechAndAutoStop();
+    monitorSpeechSignal();
     voiceState.noSpeechTimer = setTimeout(() => {
       if (voiceState.recording && !voiceState.speechDetected) {
-        if (voiceState.mode === 'debrief') updateDebriefVoiceStatus('No speech detected yet. Stopping the recording.'); else updateVoiceStatus('No speech detected yet. Stopping the recording.');
+        voiceState.microphoneError = 'No speech detected. Check your microphone in Audio settings, then try again or type your answer.';
         stopVoiceRecording();
       }
-    }, 9000);
+    }, answerRecordingPolicy.noSpeechMs);
     const maxRecordingMs = voiceState.mode === 'debrief' ? 180000 : 120000;
     voiceState.maxRecordingTimer = setTimeout(() => {
       if (voiceState.recording) {
         if (voiceState.mode === 'debrief') updateDebriefVoiceStatus('Maximum recording time reached. Transcribing your reflection...'); else updateVoiceStatus('Maximum recording time reached. Transcribing your answer...');
-        if (voiceState.analyser) voiceState.speechDetected = true;
         stopVoiceRecording();
       }
     }, maxRecordingMs);
   } catch (err) {
     console.warn('Voice operation failed.');
-    if (voiceState.mode === 'debrief') updateDebriefVoiceStatus('Microphone access failed. Allow microphone permission in the app/system settings, or type your reflection.'); else updateVoiceStatus('Microphone access failed. Allow microphone permission in the app/system settings, or type your answer.');
+    const message = microphoneError(err); microphoneMessage(message);
+    if (voiceState.mode === 'debrief') updateDebriefVoiceStatus(message); else updateVoiceStatus(message);
     stopVoiceRecording();
     if (voiceState.mode === 'debrief') {
       if ($('submitDebriefAnswer')) $('submitDebriefAnswer').disabled = false;
@@ -831,7 +1010,7 @@ async function startVoiceRecording() {
       if ($('submitAnswer')) $('submitAnswer').disabled = false;
       if ($('skipAnswer')) $('skipAnswer').disabled = false;
     }
-  }
+  } finally { microphoneState.busy = false; refreshMicrophoneControls(); }
 }
 
 async function toggleVoiceAnswer() {
@@ -841,8 +1020,8 @@ async function toggleVoiceAnswer() {
     return;
   }
   if (voiceState.recording) {
-    updateVoiceStatus('Recording stopped manually. Transcribing your answer...');
-    if (!voiceState.speechDetected) voiceState.speechDetected = true;
+    audioTrace('recording stopped manually');
+    if (voiceState.mode === 'debrief') updateDebriefVoiceStatus('Recording stopped. Transcribing your reflection...'); else updateVoiceStatus('Recording stopped. Transcribing your answer...');
     stopVoiceRecording();
   } else {
     await startVoiceRecording();
@@ -853,10 +1032,12 @@ async function toggleVoiceAnswer() {
 function stopNarrationForUserAction() {
   // Any user navigation/action should immediately stop the current narrator audio.
   // Incrementing speechRequestId also prevents delayed TTS responses from starting after the user moved on.
-  cancelInterviewerSpeech();
+  cancelInterviewerSpeech('navigation');
 }
 
 function setTab(tab) {
+  if (voiceState.recording || microphoneState.busy) cancelVoiceRecording();
+  clearLocalMicrophoneTest();
   stopNarrationForUserAction();
   state.currentTab = tab;
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
@@ -1958,7 +2139,7 @@ async function init() {
   document.addEventListener('click', e => {
     const button = e.target && e.target.closest ? e.target.closest('button') : null;
     if (!button) return;
-    stopNarrationForUserAction();
+    if (['submitAnswer','skipAnswer','startInterview','startDebrief','submitDebriefAnswer','submitQuizAnswer','nextQuizQuestion','uploadVrReport'].includes(button.id)) cancelInterviewerSpeech('learner action');
   }, true);
   $('startInterview').addEventListener('click', () => {
     voiceState.mode = 'interview';

@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; media-src blob:; connect-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; base-uri 'none'; form-action 'none'">
+<title>WAH — Microphone diagnostic (development only)</title><link rel="stylesheet" href="styles.css"></head>
+<body><h1>Microphone diagnostic</h1>
+<p>Development only. No assessment is loaded. Audio stays local until you explicitly send it for transcription.</p>
+<p>Test sentence: <strong>The orange safety helmet is beside the blue ladder.</strong></p>
+<button id="permission">Grant microphone permission / refresh devices</button>
+<p id="defaultDevice">Default microphone: permission not yet requested.</p>
+<label for="devices">Recording device</label> <select id="devices"><option value="">System default</option></select>
+<p id="activeDevice">Active microphone: none</p>
+<button id="record">Record</button> <button id="stop" disabled>Stop</button> <button id="cancel">Cancel / discard</button>
+<pre id="stats">No recording.</pre><audio id="playback" controls></audio>
+<p><button id="save" disabled>Save recording locally</button> <button id="transcribe" disabled>Send to transcription Worker</button></p>
+<p id="status" role="status">Ready. Grant permission to reveal device labels.</p>
+<h2>Verbatim transcript</h2><pre id="transcript"></pre>
+<script src="renderer.js"></script></body></html>

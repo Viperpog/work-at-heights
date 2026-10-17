@@ -71,7 +71,8 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
 handle('read-json', async (_, relativePath) => {
-  if (relativePath === 'data/config.json') return serviceConfig.rendererConfig;
+  if (relativePath === 'data/config.json') return !app.isPackaged && process.env.WAH_AUDIO_DIAGNOSTICS === '1'
+    ? { ...serviceConfig.rendererConfig, audioDiagnostics: true } : serviceConfig.rendererConfig;
   if (!['data/question-bank.json', 'data/final-quiz-bank.json'].includes(relativePath)) throw new Error('Unsupported application data.');
   const p = path.join(app.getAppPath(), relativePath);
   return JSON.parse(fs.readFileSync(p, 'utf8'));
