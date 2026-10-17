@@ -4,11 +4,9 @@ const fs = require('fs');
 const mammoth = require('mammoth');
 const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle } = require('docx');
 
-const CIMATEC_PROXY_URL = 'https://tech-frontiers-senai-cimatec-openai-proxy.alexandre-g-siqueira.workers.dev/';
-
-// IMPORTANT: Put the NEW transcription-only Worker URL here.
-// Do not use the existing CIMATEC proxy here, because other programs may depend on it.
-const TRANSCRIPTION_PROXY_URL = 'https://working-at-height-transcription-proxy.agomesdesiqueira.workers.dev/';
+const { loadServiceConfig, createServiceClient } = require('./services.cjs');
+const serviceConfig = loadServiceConfig(app.getAppPath());
+const services = createServiceClient(serviceConfig, { fetchImpl: (...args) => fetch(...args) });
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -28,6 +26,8 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
 ipcMain.handle('read-json', async (_, relativePath) => {
+  if (relativePath === 'data/config.json') return serviceConfig.rendererConfig;
+  if (!['data/question-bank.json', 'data/final-quiz-bank.json'].includes(relativePath)) throw new Error('Unsupported application data.');
   const p = path.join(app.getAppPath(), relativePath);
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 });
@@ -46,105 +46,10 @@ ipcMain.handle('save-ebook', async () => {
 
 ipcMain.handle('open-external', async (_, url) => shell.openExternal(url));
 
-ipcMain.handle('call-cimatec', async (_event, payload) => {
-  const response = await fetch(CIMATEC_PROXY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      messages: payload.messages,
-      maxTokens: payload.maxTokens || 1200
-    })
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`CIMATEC proxy error ${response.status}: ${errorText}`);
-  }
-  const data = await response.json();
-  return data.content || data.result || '';
-});
-
-
-ipcMain.handle('transcribe-audio', async (_event, payload) => {
-  if (!payload || !payload.audioBase64) {
-    throw new Error('No audio payload received for transcription.');
-  }
-
-  if (!TRANSCRIPTION_PROXY_URL || TRANSCRIPTION_PROXY_URL.includes('PASTE-YOUR-NEW-TRANSCRIPTION-WORKER-URL-HERE')) {
-    throw new Error('Transcription Worker URL is not configured in main.js. Replace TRANSCRIPTION_PROXY_URL with your new transcription-only Cloudflare Worker URL.');
-  }
-
-  const response = await fetch(TRANSCRIPTION_PROXY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'transcribe',
-      audioBase64: payload.audioBase64,
-      mimeType: payload.mimeType || 'audio/webm',
-      fileName: payload.fileName || 'interview-answer.webm'
-    })
-  });
-
-  const responseText = await response.text();
-  if (!response.ok) {
-    throw new Error(`Transcription Worker error ${response.status}: ${responseText}`);
-  }
-
-  let data = {};
-  try {
-    data = JSON.parse(responseText);
-  } catch (_) {
-    throw new Error(`Transcription Worker returned non-JSON response: ${responseText.slice(0, 300)}`);
-  }
-
-  if (data.error) {
-    throw new Error(`Transcription Worker returned error: ${data.error}`);
-  }
-
-  return { text: data.text || data.transcript || data.content || '' };
-});
-
-
-ipcMain.handle('synthesize-speech', async (_event, payload) => {
-  const text = String(payload && payload.text ? payload.text : '').trim();
-  if (!text) throw new Error('No text received for speech synthesis.');
-
-  if (!TRANSCRIPTION_PROXY_URL || TRANSCRIPTION_PROXY_URL.includes('PASTE-YOUR-NEW-TRANSCRIPTION-WORKER-URL-HERE')) {
-    throw new Error('Voice Worker URL is not configured in main.js. Replace TRANSCRIPTION_PROXY_URL with your transcription/voice Cloudflare Worker URL.');
-  }
-
-  const response = await fetch(TRANSCRIPTION_PROXY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'tts',
-      text,
-      voice: payload.voice || 'cedar',
-      model: payload.model || 'gpt-4o-mini-tts',
-      instructions: payload.instructions || 'Speak naturally as a warm, experienced senior safety instructor. Use a clear professional tone, moderate pace, and supportive intonation.'
-    })
-  });
-
-  const responseText = await response.text();
-  if (!response.ok) {
-    throw new Error(`Voice Worker error ${response.status}: ${responseText}`);
-  }
-
-  let data = {};
-  try {
-    data = JSON.parse(responseText);
-  } catch (_) {
-    throw new Error(`Voice Worker returned non-JSON response: ${responseText.slice(0, 300)}`);
-  }
-
-  if (data.error) {
-    throw new Error(`Voice Worker returned error: ${data.error}`);
-  }
-
-  return {
-    audioBase64: data.audioBase64 || '',
-    mimeType: data.mimeType || 'audio/mpeg'
-  };
-});
+// Errors from services contain operation/status only, never upstream bodies or learner data.
+ipcMain.handle('call-cimatec', async (_event, payload) => services.chat(payload));
+ipcMain.handle('transcribe-audio', async (_event, payload) => services.transcribe(payload));
+ipcMain.handle('synthesize-speech', async (_event, payload) => services.speech(payload));
 
 ipcMain.handle('select-vr-report', async () => {
   const result = await dialog.showOpenDialog({

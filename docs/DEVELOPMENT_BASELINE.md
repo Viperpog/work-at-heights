@@ -1,5 +1,7 @@
 # Startup and integration verification baseline
 
+This is the historical Task 1 verification record. Current integration/configuration and release changes are documented in [Task 2 reliability](INTEGRATION_RELEASE_RELIABILITY.md).
+
 Verified locally on Windows on 2026-10-17. Only tests, test configuration, and this document were changed. Production source, assessment content, README instructions, shared login, credentials, and external services were not modified. Nothing was deployed.
 
 ## Environment and startup

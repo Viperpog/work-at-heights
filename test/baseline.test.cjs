@@ -244,20 +244,25 @@ test('real document libraries export reports/certificate and import VR text with
   }
 });
 
-test('desktop chat payload is rejected by supplied UF Worker without reaching upstream', async () => {
+test('desktop chat payload reaches UF Worker with personas and conversation preserved', async () => {
+  const messages = [{ role: 'system', content: 'Synthetic instructor persona' }, { role: 'user', content: 'Synthetic context' }];
   const main = mainProcess(async (_url, options) => {
-    const response = await worker('cloudflare-worker.js').fetch(new Request('https://example.invalid', options), {});
-    assert.equal(response.status, 400);
+    const response = await worker('cloudflare-worker.js', async (url, upstream) => {
+      assert.equal(new URL(url).hostname, 'api.ai.it.ufl.edu');
+      assert.deepEqual(JSON.parse(upstream.body).messages, messages);
+      return Response.json({ choices: [{ message: { content: 'Synthetic UF response' } }] });
+    }).fetch(new Request('https://example.invalid', options), { UF_API_KEY: 'test-only-not-a-key' });
+    assert.equal(response.status, 200);
     return response;
   });
-  await assert.rejects(main.handlers.get('call-cimatec')(null, { messages: [{ role: 'user', content: 'synthetic' }] }), /Missing prompt/);
+  assert.equal(await main.handlers.get('call-cimatec')(null, { messages }), 'Synthetic UF response');
 });
 
 test('voice Worker accepts desktop chat, transcription and synthesis contracts with fake upstream', async () => {
   const seen = [];
   const upstream = async (url, options) => {
     seen.push({ url, options });
-    if (url.endsWith('/audio/speech')) return new Response(new Uint8Array([1, 2, 3]));
+    if (url.endsWith('/audio/speech')) return new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Type': 'audio/mpeg' } });
     if (url.endsWith('/audio/transcriptions')) return Response.json({ text: 'Synthetic transcript' });
     return Response.json({ choices: [{ message: { content: 'Synthetic response' } }] });
   };
