@@ -1,5 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
-contextBridge.exposeInMainWorld('appApi', {
+contextBridge.exposeInMainWorld('appApi', Object.freeze({
   readJson: (p) => ipcRenderer.invoke('read-json', p),
   saveEbook: () => ipcRenderer.invoke('save-ebook'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
@@ -11,4 +11,4 @@ contextBridge.exposeInMainWorld('appApi', {
   callCimatec: (payload) => ipcRenderer.invoke('call-cimatec', payload),
   transcribeAudio: (payload) => ipcRenderer.invoke('transcribe-audio', payload),
   synthesizeSpeech: (payload) => ipcRenderer.invoke('synthesize-speech', payload)
-});
+}));

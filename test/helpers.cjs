@@ -13,7 +13,12 @@ function renderer(api = {}) {
     if (!elements.has(id)) elements.set(id, {
       value: '', textContent: '', innerHTML: '', disabled: false, dataset: {},
       classList: { add() {}, remove() {}, toggle() {} },
-      addEventListener() {}, appendChild() {}, replaceChildren() {},
+      children: [],
+      addEventListener() {},
+      appendChild(child) { this.children.push(child); return child; },
+      append(...children) { this.children.push(...children); },
+      replaceChildren(...children) { this.children = children; },
+      get firstChild() { return this.children[0]; },
       setAttribute() {}, removeAttribute() {},
       querySelector() { return null; }
     });
@@ -21,7 +26,8 @@ function renderer(api = {}) {
   };
   const document = {
     getElementById: element, querySelectorAll: () => [],
-    querySelector: () => null, createElement: () => element(Symbol())
+    querySelector: selector => selector.startsWith('.tabs button[data-tab=') ? element(selector) : null,
+    createElement: tag => Object.assign(element(Symbol()), { tagName: tag.toUpperCase() }), createTextNode: text => ({ textContent: String(text) })
   };
   const context = vm.createContext({
     document, window: { appApi: api }, console: { warn() {}, error() {}, log() {} },
@@ -45,21 +51,62 @@ function renderer(api = {}) {
 
 function mainProcess(fetchImpl = () => { throw new Error('Unexpected network request'); }) {
   const handlers = new Map();
+  const rawHandlers = new Map();
+  const events = new Map();
+  const contents = {
+    isDestroyed: () => false,
+    getURL: () => require('node:url').pathToFileURL(path.join(root, 'src/index.html')).href,
+    on: (name, fn) => events.set(name, fn), once: (name, fn) => events.set(name, fn),
+    setWindowOpenHandler: fn => events.set('window-open', fn),
+    session: {
+      setPermissionRequestHandler: fn => events.set('permission-request', fn),
+      setPermissionCheckHandler: fn => events.set('permission-check', fn),
+      webRequest: { onBeforeRequest: fn => events.set('resource', fn) }
+    }
+  };
+  contents.mainFrame = { parent: null, url: contents.getURL() };
+  const event = { sender: contents, senderFrame: contents.mainFrame };
   const dialog = {
     showSaveDialog: async () => ({ canceled: true }),
     showOpenDialog: async () => ({ canceled: true, filePaths: [] })
   };
   const electron = {
-    app: { getAppPath: () => root, whenReady: () => ({ then() {} }), on() {} },
-    ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
-    dialog, shell: { openExternal: async url => url }, BrowserWindow: function () {}
+    app: { getAppPath: () => root, whenReady: () => ({ then: fn => fn() }), on() {} },
+    ipcMain: { handle: (name, handler) => { rawHandlers.set(name, handler); handlers.set(name, (e, ...args) => handler(e ?? event, ...args)); } },
+    dialog, shell: { openExternal: async url => url }, BrowserWindow: function (options) { this.webContents = contents; this.loadFile = () => {}; events.set('window-options', options); }
   };
   const context = vm.createContext({
     require: name => name === 'electron' ? electron : createRequire(path.join(root, 'src/main.js'))(name),
     __dirname: path.join(root, 'src'), process, console, fetch: fetchImpl
   });
   vm.runInContext(fs.readFileSync(path.join(root, 'src/main.js'), 'utf8'), context);
-  return { handlers, dialog, run: code => vm.runInContext(code, context) };
+  return { handlers, rawHandlers, dialog, events, event, contents, run: code => vm.runInContext(code, context) };
+}
+
+function completedState(smartLevel = 'Basic') {
+  const h = renderer();
+  h.context.interviewData = JSON.parse(fs.readFileSync(path.join(root, 'data/question-bank.json')));
+  h.context.quizData = JSON.parse(fs.readFileSync(path.join(root, 'data/final-quiz-bank.json')));
+  h.context.smartLevel = smartLevel;
+  h.run(`state.studentName='Synthetic Learner'; state.studentEmail='learner@example.invalid'; state.orientationCompleted=true;
+    state.smartchatsCompleted=true; state.smartQuestionCount=1; state.expertiseAfterSmartChats=smartLevel;
+    for(let module=1;module<=8;module++) {
+      const q=interviewData.find(q=>q.module===module && q.difficulty===(module===1?smartLevel.toLowerCase():'basic'));
+      state.interview.history.push({question:q,answer:'I do not know',skipped:true,evaluation:localEvaluate(q,'',true)});
+    }
+    finishInterview();
+    let module=1,level='basic';
+    while(module<=8) {
+      const q=quizData.find(q=>q.module===module && q.difficulty===level);
+      state.quiz.history.push({question:q,selectedIndex:q.correctIndex,selectedText:q.options[q.correctIndex],correctText:q.options[q.correctIndex],correct:true,earnedPoints:q.points});
+      const next=advanceQuiz(true,q); module=next.module;level=next.level;
+    }
+    state.quiz.module5ExpertEncountered=true; finishQuizAdaptive();
+    state.vrCompleted=true; state.vrExpertiseLevel='Intermediate';
+    state.debriefing.vrReportFileName='synthetic.docx';state.debriefing.vrReportText='Synthetic VR report';
+    state.debriefing.history=[{role:'interviewer',text:'Synthetic follow-up'},{role:'user',text:'Synthetic reflection'}];
+    state.debriefingCompleted=true;`);
+  return h.json('state');
 }
 
 function worker(relativePath, upstream, timers = {}) {
@@ -75,4 +122,4 @@ function worker(relativePath, upstream, timers = {}) {
   return context.worker;
 }
 
-module.exports = { root, renderer, mainProcess, worker };
+module.exports = { root, renderer, mainProcess, completedState, worker };

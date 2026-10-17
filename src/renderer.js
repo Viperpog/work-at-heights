@@ -141,14 +141,12 @@ function renderInstructorCards() {
       button.type = 'button';
       button.className = `instructorCard ${state.selectedInstructorId === instructor.id ? 'selected' : ''}`;
       button.dataset.instructorId = instructor.id;
-      button.innerHTML = `
-        <img src="${instructor.image}" alt="Portrait of ${instructor.name}" />
-        <span class="instructorCardBody">
-          <strong>${instructor.name}</strong>
-          <em>${instructor.origin}</em>
-          <span>${instructor.displayDescription || instructor.description}</span>
-        </span>
-      `;
+      const portrait = document.createElement('img');
+      portrait.src = instructor.image;
+      portrait.alt = 'Portrait of ' + instructor.name;
+      const body = textNode('span', '', 'instructorCardBody');
+      body.append(textNode('strong', instructor.name), textNode('em', instructor.origin), textNode('span', instructor.displayDescription || instructor.description));
+      button.append(portrait, body);
       button.addEventListener('click', () => {
         selectInstructor(instructor.id);
         if (wrap.id === 'instructorModalChoices') closeInstructorModal();
@@ -211,6 +209,49 @@ function personaOpening() {
 }
 
 const $ = (id) => document.getElementById(id);
+
+// Untrusted values are always text, never HTML.
+function textNode(tag, value, className = '') {
+  const node = document.createElement(tag);
+  node.textContent = String(value ?? '');
+  if (className) node.className = className;
+  return node;
+}
+function textParagraph(root, label, value) {
+  const paragraph = textNode('p', '');
+  if (label) paragraph.appendChild(textNode('strong', label + ' '));
+  paragraph.appendChild(document.createTextNode(String(value ?? '')));
+  root.appendChild(paragraph);
+}
+function renderSmartResults() {
+  const root = $('smartResults');
+  root.replaceChildren();
+  if (!state.smartchatsCompleted) { root.textContent = 'No CSV loaded.'; return; }
+  const badge = textNode('p', '');
+  badge.appendChild(textNode('span', state.expertiseAfterSmartChats || 'Completed', 'badge'));
+  root.appendChild(badge);
+  textParagraph(root, '', state.smartSummary || 'SmartChats analysis completed.');
+}
+function renderVrStatus(analyzing = false) {
+  const root = $('vrReportStatus');
+  root.replaceChildren();
+  if (!state.vrCompleted && !analyzing) { root.textContent = 'No VR report uploaded.'; return; }
+  textParagraph(root, 'Uploaded:', state.debriefing.vrReportFileName || 'VR report');
+  if (analyzing) textParagraph(root, '', 'Analyzing VR experience...');
+  else {
+    textParagraph(root, 'VR Expertise Level:', state.vrExpertiseLevel || 'Not identified');
+    textParagraph(root, '', state.debriefing.vrSummary || 'VR report analyzed.');
+  }
+}
+
+async function handleDocumentSave(operation, onSaved) {
+  try {
+    const result = await operation();
+    if (!result.canceled) onSaved(result);
+  } catch (_) {
+    alert('Unable to save the document. Check completion evidence and choose a valid Word document destination.');
+  }
+}
 
 const voiceState = {
   enabled: false,
@@ -284,7 +325,8 @@ function refreshVoiceControls() {
   }
   if ($('voiceAnswer')) {
     $('voiceAnswer').disabled = !voiceState.supportedRecording || voiceState.transcribing;
-    $('voiceAnswer').innerHTML = '<span aria-hidden="true" class="micIcon">🎙️</span><span class="srOnly">Record voice answer</span>';
+    $('voiceAnswer').replaceChildren(textNode('span', '🎙️', 'micIcon'), textNode('span', 'Record voice answer', 'srOnly'));
+    $('voiceAnswer').firstChild.setAttribute('aria-hidden', 'true');
     $('voiceAnswer').setAttribute('aria-label', voiceState.recording ? 'Recording voice answer' : 'Record voice answer');
     $('voiceAnswer').title = voiceState.recording ? 'Recording. You can click to stop early.' : 'Record voice answer';
     $('voiceAnswer').classList.toggle('active', voiceState.recording && voiceState.mode === 'interview');
@@ -300,7 +342,8 @@ function refreshVoiceControls() {
   }
   if ($('debriefVoiceAnswer')) {
     $('debriefVoiceAnswer').disabled = !voiceState.supportedRecording || voiceState.transcribing;
-    $('debriefVoiceAnswer').innerHTML = '<span aria-hidden="true" class="micIcon">🎙️</span><span class="srOnly">Record voice reflection</span>';
+    $('debriefVoiceAnswer').replaceChildren(textNode('span', '🎙️', 'micIcon'), textNode('span', 'Record voice reflection', 'srOnly'));
+    $('debriefVoiceAnswer').firstChild.setAttribute('aria-hidden', 'true');
     $('debriefVoiceAnswer').setAttribute('aria-label', voiceState.recording ? 'Recording voice reflection' : 'Record voice reflection');
     $('debriefVoiceAnswer').title = voiceState.recording ? 'Recording. You can click to stop early.' : 'Record voice reflection';
     $('debriefVoiceAnswer').classList.toggle('active', voiceState.recording && voiceState.mode === 'debrief');
@@ -1010,13 +1053,11 @@ function rebuildInterfaceFromState(resumeTab = getFirstUnfinishedTab(state)) {
 
   if ($('smartCsv')) $('smartCsv').value = '';
   if ($('smartResults')) {
-    $('smartResults').innerHTML = state.smartchatsCompleted
-      ? `<p><span class="badge">${state.expertiseAfterSmartChats || 'Completed'}</span></p><p>${state.smartSummary || 'SmartChats analysis completed.'}</p>`
-      : 'No CSV loaded.';
+    renderSmartResults();
   }
   if ($('completeSmart')) $('completeSmart').disabled = !state.smartchatsCompleted;
 
-  if ($('chatLog')) $('chatLog').innerHTML = '';
+  if ($('chatLog')) $('chatLog').replaceChildren();
   if ($('answerBox')) $('answerBox').value = '';
   if ($('interviewIntro')) $('interviewIntro').classList.toggle('hidden', state.interviewCompleted);
   if ($('interviewBox')) $('interviewBox').classList.add('hidden');
@@ -1034,12 +1075,10 @@ function rebuildInterfaceFromState(resumeTab = getFirstUnfinishedTab(state)) {
   if ($('debriefIntro')) $('debriefIntro').classList.toggle('hidden', state.debriefingCompleted);
   if ($('debriefBox')) $('debriefBox').classList.add('hidden');
   if ($('debriefComplete')) $('debriefComplete').classList.toggle('hidden', !state.debriefingCompleted);
-  if ($('debriefLog')) $('debriefLog').innerHTML = '';
+  if ($('debriefLog')) $('debriefLog').replaceChildren();
   if ($('debriefAnswerBox')) $('debriefAnswerBox').value = '';
   if ($('vrReportStatus')) {
-    $('vrReportStatus').innerHTML = state.vrCompleted
-      ? `<p><strong>Uploaded:</strong> ${state.debriefing.vrReportFileName || 'VR report'}</p><p><strong>VR Expertise Level:</strong> ${state.vrExpertiseLevel || 'Not identified'}</p><p>${state.debriefing.vrSummary || 'VR report analyzed.'}</p>`
-      : 'No VR report uploaded.';
+    renderVrStatus();
   }
   if ($('continueDebriefing')) $('continueDebriefing').disabled = !state.vrCompleted;
   if ($('startDebrief')) $('startDebrief').disabled = !state.vrCompleted;
@@ -1113,10 +1152,10 @@ function resetProgramForRetake() {
   if ($('studentEmail')) $('studentEmail').value = keepEmail;
 
   if ($('smartCsv')) $('smartCsv').value = '';
-  if ($('smartResults')) $('smartResults').innerHTML = 'No CSV loaded.';
+  if ($('smartResults')) $('smartResults').textContent = 'No CSV loaded.';
   if ($('completeSmart')) $('completeSmart').disabled = true;
 
-  if ($('chatLog')) $('chatLog').innerHTML = '';
+  if ($('chatLog')) $('chatLog').replaceChildren();
   if ($('answerBox')) $('answerBox').value = '';
   if ($('interviewIntro')) $('interviewIntro').classList.remove('hidden');
   if ($('interviewBox')) $('interviewBox').classList.add('hidden');
@@ -1133,9 +1172,9 @@ function resetProgramForRetake() {
   if ($('debriefIntro')) $('debriefIntro').classList.remove('hidden');
   if ($('debriefBox')) $('debriefBox').classList.add('hidden');
   if ($('debriefComplete')) $('debriefComplete').classList.add('hidden');
-  if ($('debriefLog')) $('debriefLog').innerHTML = '';
+  if ($('debriefLog')) $('debriefLog').replaceChildren();
   if ($('debriefAnswerBox')) $('debriefAnswerBox').value = '';
-  if ($('vrReportStatus')) $('vrReportStatus').innerHTML = 'No VR report uploaded.';
+  if ($('vrReportStatus')) $('vrReportStatus').textContent = 'No VR report uploaded.';
   if ($('continueDebriefing')) $('continueDebriefing').disabled = true;
   if ($('startDebrief')) $('startDebrief').disabled = true;
   if ($('continueCertificate')) $('continueCertificate').disabled = true;
@@ -1559,7 +1598,7 @@ function renderQuizQuestion() {
   $('quizProgressText').textContent = `Questions presented: ${state.quiz.history.length + 1}`;
   $('quizQuestionText').textContent = q.question;
   $('quizFeedback').classList.add('hidden');
-  $('quizFeedback').innerHTML = '';
+  $('quizFeedback').replaceChildren();
   $('nextQuizQuestion').classList.add('hidden');
   $('submitQuizAnswer').classList.remove('hidden');
   $('submitQuizAnswer').disabled = false;
@@ -1652,15 +1691,16 @@ function submitQuizAnswer() {
   const correctText = q.options[q.correctIndex];
   state.quiz.history.push({ question: q, selectedIndex, selectedText, correctText, correct, earnedPoints });
 
-  const recText = !correct && q.recommendedChapters && q.recommendedChapters.length
-    ? `<p><strong>Recommended review:</strong> ${q.recommendedChapters.map(r => `Module ${r.module}, Chapter ${r.chapter}: ${r.topic}`).join('; ')}</p>`
-    : '';
-  $('quizFeedback').innerHTML = `
-    <p><strong>${correct ? 'Correct' : 'Incorrect'}</strong></p>
-    <p><strong>Correct answer:</strong> ${correctText}</p>
-    <p>${q.explanation}</p>
-    ${recText}
-  `;
+  const feedback = $('quizFeedback');
+  feedback.replaceChildren();
+  const result = textNode('p', '');
+  result.appendChild(textNode('strong', correct ? 'Correct' : 'Incorrect'));
+  feedback.appendChild(result);
+  textParagraph(feedback, 'Correct answer:', correctText);
+  textParagraph(feedback, '', q.explanation);
+  if (!correct && q.recommendedChapters && q.recommendedChapters.length) {
+    textParagraph(feedback, 'Recommended review:', q.recommendedChapters.map(r => 'Module ' + r.module + ', Chapter ' + r.chapter + ': ' + r.topic).join('; '));
+  }
   $('quizFeedback').classList.remove('hidden');
   document.querySelectorAll('input[data-quiz-option="true"]').forEach(input => input.disabled = true);
   $('submitQuizAnswer').classList.add('hidden');
@@ -1731,16 +1771,18 @@ async function summarizeVrReport() {
 }
 
 async function analyzeVrReport() {
-  const result = await window.appApi.selectVrReport();
+  let result;
+  try { result = await window.appApi.selectVrReport(); }
+  catch (_) { alert('Unable to read this Word report. Select a valid .docx file within the supported size limits.'); return; }
   if (result.canceled) return;
   state.debriefing.vrReportFileName = result.fileName;
   state.debriefing.vrReportText = result.text || '';
-  $('vrReportStatus').innerHTML = `<p><strong>Uploaded:</strong> ${result.fileName}</p><p>Analyzing VR experience...</p>`;
+  renderVrStatus(true);
   if ($('continueDebriefing')) $('continueDebriefing').disabled = true;
   if ($('startDebrief')) $('startDebrief').disabled = true;
   await summarizeVrReport();
   state.vrCompleted = true;
-  $('vrReportStatus').innerHTML = `<p><strong>Uploaded:</strong> ${result.fileName}</p><p><strong>VR Expertise Level:</strong> ${state.vrExpertiseLevel}</p><p>${state.debriefing.vrSummary}</p>`;
+  renderVrStatus();
   if ($('continueDebriefing')) $('continueDebriefing').disabled = false;
   if ($('startDebrief')) $('startDebrief').disabled = false;
   updateStatus();
@@ -1890,14 +1932,14 @@ async function init() {
   $('studentName').addEventListener('input', refreshTab1);
   $('studentEmail').addEventListener('input', refreshTab1);
   $('openSmartChats').addEventListener('click', () => window.appApi.openExternal(`https://smartchats.info/course/whs?=${encodeURIComponent(state.studentEmail)}`));
-  $('downloadEbook').addEventListener('click', async () => { const r = await window.appApi.saveEbook(); if (!r.canceled) alert(`Ebook saved to ${r.filePath}`); });
+  $('downloadEbook').addEventListener('click', () => handleDocumentSave(() => window.appApi.saveEbook(), r => alert(`Ebook saved to ${r.filePath}`)));
   $('completeLearning').addEventListener('click', () => { state.orientationCompleted = true; unlock(2); setTab(2); saveSession(); });
   $('smartCsv').addEventListener('change', e => {
     const file = e.target.files[0]; if (!file) return;
     Papa.parse(file, { header: true, skipEmptyLines: true, complete: res => {
       const result = classifySmartChats(res.data);
       state.smartQuestionCount = result.count; state.expertiseAfterSmartChats = result.level; state.smartSummary = result.summary; state.smartchatsCompleted = true;
-      $('smartResults').innerHTML = `<p><span class="badge">${result.level}</span></p><p>${result.summary}</p>`;
+      renderSmartResults();
       $('completeSmart').disabled = false; updateStatus(); saveSession();
     }});
   });
@@ -1933,19 +1975,19 @@ ${makeSegue(null, q)}`);
   });
   $('submitAnswer').addEventListener('click', () => handleAnswer(false));
   $('skipAnswer').addEventListener('click', () => handleAnswer(true));
-  $('exportInterview').addEventListener('click', async () => { const r = await window.appApi.saveInterviewReport(state); if (!r.canceled) { $('unlockQuiz').disabled = false; saveSession(); alert(`Report saved to ${r.filePath}`); } });
+  $('exportInterview').addEventListener('click', () => { return handleDocumentSave(() => window.appApi.saveInterviewReport(state), r => { $('unlockQuiz').disabled = false; saveSession(); alert(`Report saved to ${r.filePath}`); }); });
   $('unlockQuiz').addEventListener('click', () => { unlock(4); setTab(4); saveSession(); });
   $('startQuiz').addEventListener('click', startQuizAdaptive);
   $('submitQuizAnswer').addEventListener('click', submitQuizAnswer);
   $('nextQuizQuestion').addEventListener('click', continueQuiz);
-  $('exportQuiz').addEventListener('click', async () => { const r = await window.appApi.saveQuizReport(state); if (!r.canceled) { $('unlockVrAnalysis').disabled = false; saveSession(); alert(`Quiz report saved to ${r.filePath}`); } });
+  $('exportQuiz').addEventListener('click', () => { return handleDocumentSave(() => window.appApi.saveQuizReport(state), r => { $('unlockVrAnalysis').disabled = false; saveSession(); alert(`Quiz report saved to ${r.filePath}`); }); });
   $('unlockVrAnalysis').addEventListener('click', () => { unlock(5); setTab(5); saveSession(); });
   $('uploadVrReport').addEventListener('click', analyzeVrReport);
   $('continueDebriefing').addEventListener('click', () => { unlock(6); setTab(6); saveSession(); });
   $('startDebrief').addEventListener('click', startDebriefing);
   $('submitDebriefAnswer').addEventListener('click', submitDebriefingAnswer);
-  $('exportDebrief').addEventListener('click', async () => { const r = await window.appApi.saveDebriefingReport(state); if (!r.canceled) { $('continueCertificate').disabled = false; saveSession(); alert(`Debriefing report saved to ${r.filePath}`); } });
+  $('exportDebrief').addEventListener('click', () => { return handleDocumentSave(() => window.appApi.saveDebriefingReport(state), r => { $('continueCertificate').disabled = false; saveSession(); alert(`Debriefing report saved to ${r.filePath}`); }); });
   $('continueCertificate').addEventListener('click', () => { unlock(7); updateCertificatePreview(); setTab(7); saveSession(); });
-  $('downloadCertificate').addEventListener('click', async () => { updateCertificatePreview(); const r = await window.appApi.saveCertificate(state); if (!r.canceled) { state.certificateDownloaded = true; updateStatus(); saveSession(); alert(`Certificate saved to ${r.filePath}`); } });
+  $('downloadCertificate').addEventListener('click', () => { updateCertificatePreview(); return handleDocumentSave(() => window.appApi.saveCertificate(state), r => { state.certificateDownloaded = true; updateStatus(); saveSession(); alert(`Certificate saved to ${r.filePath}`); }); });
 }
 init();

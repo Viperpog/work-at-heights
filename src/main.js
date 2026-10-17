@@ -7,6 +7,27 @@ const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, Tab
 const { loadServiceConfig, createServiceClient } = require('./services.cjs');
 const serviceConfig = loadServiceConfig(app.getAppPath());
 const services = createServiceClient(serviceConfig, { fetchImpl: (...args) => fetch(...args) });
+const security = require('./security.cjs');
+const documentURL = security.pathToFileURL(path.join(__dirname, 'index.html')).href;
+const trustedWindows = new Set();
+const interviewBank = JSON.parse(fs.readFileSync(path.join(app.getAppPath(), 'data/question-bank.json'), 'utf8'));
+const quizBank = JSON.parse(fs.readFileSync(path.join(app.getAppPath(), 'data/final-quiz-bank.json'), 'utf8'));
+
+function handle(channel, handler) {
+  ipcMain.handle(channel, async (event, ...args) => {
+    if (!security.trustedSender(event, trustedWindows, documentURL)) throw new Error('Untrusted IPC sender.');
+    if (args.length !== (['save-ebook', 'select-vr-report'].includes(channel) ? 0 : 1)) throw new Error('Invalid IPC arguments.');
+    return handler(event, ...args);
+  });
+}
+
+async function saveDocument(options, buffer) {
+  const { canceled, filePath } = await dialog.showSaveDialog(options);
+  if (canceled || !filePath) return { canceled: true };
+  const target = security.savePath(filePath, app.getAppPath());
+  fs.writeFileSync(target, buffer);
+  return { canceled: false, filePath: target };
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -15,9 +36,33 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      nodeIntegrationInWorker: false,
+      nodeIntegrationInSubFrames: false,
+      sandbox: true,
+      webSecurity: true,
+      webviewTag: false,
+      allowRunningInsecureContent: false
     }
   });
+  const contents = win.webContents;
+  trustedWindows.add(contents);
+  contents.once('destroyed', () => trustedWindows.delete(contents));
+  contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  contents.on('will-navigate', (event, url) => { if (url !== documentURL) event.preventDefault(); });
+  contents.on('will-frame-navigate', event => { if (!event.isMainFrame || event.url !== documentURL) event.preventDefault(); });
+  contents.on('will-redirect', event => event.preventDefault());
+  contents.on('will-attach-webview', event => event.preventDefault());
+  contents.session.webRequest.onBeforeRequest((details, callback) => {
+    callback({ cancel: !security.resourceAllowed(details.url, details.resourceType, app.getAppPath()) });
+  });
+  const allowedMedia = (wc, permission, details) => trustedWindows.has(wc) && wc.getURL() === documentURL
+    && permission === 'media' && details?.requestingUrl === documentURL && details.isMainFrame === true;
+  contents.session.setPermissionRequestHandler((wc, permission, callback, details) => {
+    callback(Boolean(allowedMedia(wc, permission, details) && Array.isArray(details.mediaTypes)
+      && details.mediaTypes.length > 0 && details.mediaTypes.every(type => type === 'audio')));
+  });
+  contents.session.setPermissionCheckHandler((wc, permission, _origin, details) => Boolean(allowedMedia(wc, permission, details) && details.mediaType === 'audio'));
   win.loadFile(path.join(__dirname, 'index.html'));
 }
 
@@ -25,33 +70,30 @@ app.whenReady().then(createWindow);
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
-ipcMain.handle('read-json', async (_, relativePath) => {
+handle('read-json', async (_, relativePath) => {
   if (relativePath === 'data/config.json') return serviceConfig.rendererConfig;
   if (!['data/question-bank.json', 'data/final-quiz-bank.json'].includes(relativePath)) throw new Error('Unsupported application data.');
   const p = path.join(app.getAppPath(), relativePath);
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 });
 
-ipcMain.handle('save-ebook', async () => {
+handle('save-ebook', async () => {
   const src = path.join(app.getAppPath(), 'docs', 'NR35_Revised_Professional_Ebook_Combined.docx');
-  const { canceled, filePath } = await dialog.showSaveDialog({
+  return saveDocument({
     title: 'Save NR-35 ebook',
     defaultPath: 'NR35_Revised_Professional_Ebook_Combined.docx',
     filters: [{ name: 'Word Document', extensions: ['docx'] }]
-  });
-  if (canceled || !filePath) return { canceled: true };
-  fs.copyFileSync(src, filePath);
-  return { canceled: false, filePath };
+  }, fs.readFileSync(src));
 });
 
-ipcMain.handle('open-external', async (_, url) => shell.openExternal(url));
+handle('open-external', async (_, url) => shell.openExternal(security.externalURL(url)));
 
 // Errors from services contain operation/status only, never upstream bodies or learner data.
-ipcMain.handle('call-cimatec', async (_event, payload) => services.chat(payload));
-ipcMain.handle('transcribe-audio', async (_event, payload) => services.transcribe(payload));
-ipcMain.handle('synthesize-speech', async (_event, payload) => services.speech(payload));
+handle('call-cimatec', async (_event, payload) => services.chat(payload));
+handle('transcribe-audio', async (_event, payload) => services.transcribe(payload));
+handle('synthesize-speech', async (_event, payload) => services.speech(payload));
 
-ipcMain.handle('select-vr-report', async () => {
+handle('select-vr-report', async () => {
   const result = await dialog.showOpenDialog({
     title: 'Select VR Experience Report',
     properties: ['openFile'],
@@ -59,9 +101,7 @@ ipcMain.handle('select-vr-report', async () => {
   });
   if (result.canceled || !result.filePaths.length) return { canceled: true };
   const filePath = result.filePaths[0];
-  const buffer = fs.readFileSync(filePath);
-  const extracted = await mammoth.extractRawText({ buffer });
-  return { canceled: false, fileName: path.basename(filePath), text: extracted.value || '' };
+  return security.readReport(filePath, options => mammoth.extractRawText(options));
 });
 
 function p(text, opts = {}) {
@@ -115,10 +155,11 @@ function summaryTable(pairs) {
   });
 }
 function safeName(name, fallback = 'student') {
-  return (name || fallback).replace(/[^a-z0-9]/gi, '_');
+  return (name || fallback).replace(/[^a-z0-9]/gi, '_').slice(0, 80);
 }
 
-ipcMain.handle('save-interview-report', async (_, state) => {
+handle('save-interview-report', async (_, input) => {
+  const state = security.validateEvidence(input, interviewBank, quizBank, false);
   const rows = [
     new TableRow({ children: ['Module','Difficulty','Question','Answer','Score','Feedback'].map(cell) }),
     ...state.interview.history.map(h => new TableRow({ children: [
@@ -147,17 +188,15 @@ ipcMain.handle('save-interview-report', async (_, state) => {
     sectionPara('Recommended Review'),
     ...((state.interview.recommendations || []).length ? state.interview.recommendations.map(r => p(`Module ${r.module}, Chapter ${r.chapter}: ${r.topic}`)) : [p('No required review chapters were identified.')])
   ]}]});
-  const { canceled, filePath } = await dialog.showSaveDialog({
+  return saveDocument({
     title: 'Save Interview Report',
     defaultPath: `${safeName(state.studentName)}_interview_report.docx`,
     filters: [{ name: 'Word Document', extensions: ['docx'] }]
-  });
-  if (canceled || !filePath) return { canceled: true };
-  fs.writeFileSync(filePath, await Packer.toBuffer(doc));
-  return { canceled: false, filePath };
+  }, await Packer.toBuffer(doc));
 });
 
-ipcMain.handle('save-quiz-report', async (_, state) => {
+handle('save-quiz-report', async (_, input) => {
+  const state = security.validateEvidence(input, interviewBank, quizBank, false);
   const quiz = state.quiz || { history: [], recommendations: [] };
   const rows = [
     new TableRow({ children: ['Module','Difficulty','Question','Selected Answer','Correct Answer','Result','Points','Explanation'].map(cell) }),
@@ -193,17 +232,15 @@ ipcMain.handle('save-quiz-report', async (_, state) => {
     sectionPara('VR Readiness Message'),
     p(quiz.vrMessage || 'Please review your results before continuing to the VR activity.')
   ]}]});
-  const { canceled, filePath } = await dialog.showSaveDialog({
+  return saveDocument({
     title: 'Save Quiz Report',
     defaultPath: `${safeName(state.studentName)}_quiz_report.docx`,
     filters: [{ name: 'Word Document', extensions: ['docx'] }]
-  });
-  if (canceled || !filePath) return { canceled: true };
-  fs.writeFileSync(filePath, await Packer.toBuffer(doc));
-  return { canceled: false, filePath };
+  }, await Packer.toBuffer(doc));
 });
 
-ipcMain.handle('save-debriefing-report', async (_, state) => {
+handle('save-debriefing-report', async (_, input) => {
+  const state = security.validateEvidence(input, interviewBank, quizBank, false);
   const d = state.debriefing || {};
   const rows = [
     new TableRow({ children: ['Speaker','Message'].map(cell) }),
@@ -228,14 +265,11 @@ ipcMain.handle('save-debriefing-report', async (_, state) => {
     sectionPara('Debriefing Conversation'),
     new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows })
   ]}]});
-  const { canceled, filePath } = await dialog.showSaveDialog({
+  return saveDocument({
     title: 'Save Debriefing Report',
     defaultPath: `${safeName(state.studentName)}_debriefing_report.docx`,
     filters: [{ name: 'Word Document', extensions: ['docx'] }]
-  });
-  if (canceled || !filePath) return { canceled: true };
-  fs.writeFileSync(filePath, await Packer.toBuffer(doc));
-  return { canceled: false, filePath };
+  }, await Packer.toBuffer(doc));
 });
 
 
@@ -271,7 +305,8 @@ function readinessMessage(level) {
   return 'The participant completed the program with a Basic readiness classification. Additional study and practice are recommended before performing complex work-at-height activities independently.';
 }
 
-ipcMain.handle('save-certificate', async (_, state) => {
+handle('save-certificate', async (_, input) => {
+  const state = security.validateEvidence(input, interviewBank, quizBank, true);
   const completed = state.debriefingCompleted ? 'Yes' : 'No';
   const overallReadiness = calculateOverallReadiness(state);
   const details = [
@@ -309,12 +344,9 @@ ipcMain.handle('save-certificate', async (_, state) => {
   });
 
   const doc = new Document({ sections: [{ children: [frame] }] });
-  const { canceled, filePath } = await dialog.showSaveDialog({
+  return saveDocument({
     title: 'Save Certificate',
     defaultPath: `${safeName(state.studentName)}_working_at_height_certificate.docx`,
     filters: [{ name: 'Word Document', extensions: ['docx'] }]
-  });
-  if (canceled || !filePath) return { canceled: true };
-  fs.writeFileSync(filePath, await Packer.toBuffer(doc));
-  return { canceled: false, filePath };
+  }, await Packer.toBuffer(doc));
 });
