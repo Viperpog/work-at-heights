@@ -68,9 +68,19 @@ app.whenReady().then(async () => {
     }
     check('service requests contain audio only, never device identifiers', requests.length===beforeLocal+2 && requests.every(r=>r.action==='transcribe' && !JSON.stringify(r).includes('headset') && !JSON.stringify(r).includes('TOZO')));
     for(const mode of ['interview','debrief']) {
-      const beforeMax=requests.length;await js(`voiceState.mode=${JSON.stringify(mode)};startVoiceRecording();true`);await wait('voiceState.recording && voiceState.speechDetected');
-      await js('window.__maxTimers.at(-1).fn();true');await wait('!voiceState.recording && !voiceState.transcribing');
+      const beforeMax=requests.length;await js(`voiceState.mode=${JSON.stringify(mode)};startVoiceRecording();true`);
+      // The analyser runs independently of MediaRecorder's async encoder. A
+      // detected signal does not mean its first dataavailable chunk exists.
+      // Real maxima occur after minutes; establish encoded audio before advancing
+      // that timer, rather than racing encoder startup a few milliseconds in.
+      await wait('voiceState.recording && voiceState.speechDetected && voiceState.audioChunks.some(chunk=>chunk.size>0)');
+      check(mode+' maximum fixture has encoded nonempty audio',await js('voiceState.audioChunks.reduce((total,chunk)=>total+chunk.size,0)>0'));
+      const stopping=await js('window.__maxTimers.at(-1).fn();window.__maxTimers.at(-1).fn();!voiceState.recording && voiceState.transcribing');
+      check(mode+' maximum stops atomically even if callback repeats',stopping);
+      await wait('!voiceState.recording && !voiceState.transcribing');
       check(mode+' maximum timer transcribes nonempty audio exactly once',requests.length===beforeMax+1);
+      assert.equal(requests[beforeMax].action,'transcribe');
+      assert.ok(Buffer.from(requests[beforeMax].audioBase64,'base64').length>0,'maximum-duration payload must contain encoded audio');
     }
     await js("state.studentName='Synthetic Learner';state.studentEmail='audio@example.invalid';state.interview.activeQuestion=chooseQuestion(1,'basic');voiceState.enabled=false;true");
     transcript='Synthetic spoken safety answer';

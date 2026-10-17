@@ -115,7 +115,7 @@ incorrect transcript alone.
 
 `npm ci` completes with unchanged dependency versions (10 existing moderate audit
 advisories). Baseline: 58 Node tests and 26 Electron checks. Microphone suite:
-9 Node tests, 21 standalone diagnostic checks, 52 learner Electron checks.
+9 Node tests, 21 standalone diagnostic checks, 56 learner Electron checks.
 Real Electron uses synthetic device/audio fixtures and mocked services; Node
 playback tests use controlled audio doubles. Max-duration tests invoke captured
 timer callbacks with original durations; they do not wait two/three minutes.
@@ -130,3 +130,28 @@ One initial learner-suite run timed out waiting for synthetic local-test analyse
 input. An unchanged rerun and the full clean-install verification passed; no
 assertions were weakened. Host audio initialization can still affect synthetic
 runtime checks. Physical Bose/TOZO findings above remain user-reported evidence.
+
+## Maximum-duration CI regression
+
+Run 39075398144 logged the same maximum-timer assertion failure in the Node 22
+and Node 24 jobs (the latter ultimately marked canceled by matrix fail-fast).
+Baseline Node/Electron and standalone diagnostic checks passed first. The failed
+test advanced the 120/180-second timer as soon as an independent analyser saw
+speech, about 46 ms after the previous check. It never established that the
+asynchronous MediaRecorder encoder had produced nonempty audio. Application code
+correctly rejects a stop with no audio chunks rather than submitting empty input.
+
+A local instrumented run of the original test confirmed **zero buffered chunks
+before stop** in both modes; that machine's final flush happened to produce 1127
+bytes and passed. The old CI logs do not include final chunk sizes. The unstable
+precondition is the test's assumption that analyser readiness implies encoder
+readiness, not a Node-22-specific runtime or transcription-service defect.
+
+The maximum fixture now waits for a real nonempty `dataavailable` chunk before
+advancing the timer, with the existing bounded condition timeout. No fixed sleep,
+retry, skipped assertion or application change is introduced. It retains the
+exactly-one request assertion, additionally checks encoded payload bytes and
+`transcribe` action, and invokes the captured maximum callback twice to verify
+the atomic stopping/transcribing guard. Both stages run the same assertions.
+The 4-second silence / 15-second no-speech policy is untouched. Actual maxima
+remain 120/180 seconds; only their test clock is advanced.

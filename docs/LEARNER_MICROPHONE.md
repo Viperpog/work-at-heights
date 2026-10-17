@@ -73,7 +73,7 @@ The lockfile and dependency versions are unchanged; npm reported the existing
   `MediaStream.getAudioTracks()` method; its assertions are unchanged.
 - `npm run test:electron`: 22 smoke + 4 runtime checks passed, 0 failed.
 - `npm run test:microphone`: 9 Node tests (including 6 audio lifecycle/boundary tests) +
-  21 developer diagnostic checks + 52 learner integration checks passed, 0 failed.
+  21 developer diagnostic checks + 56 learner integration checks passed, 0 failed.
 
 The learner suite runs the actual main/preload/renderer with synthetic input
 devices/audio and a mocked provider. It checks default/exact constraints, shared
