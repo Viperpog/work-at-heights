@@ -100,6 +100,10 @@ Cloudflare's binding limits are local to a Cloudflare location and are not a glo
 
 ## Release workflow
 
+Manual packaging is available through `workflow_dispatch`. It runs the same test gate and all three installer targets, uploading Actions artifacts without publishing. The publish job explicitly requires a successful `push` event on `refs/tags/v*`; even a manual run selecting a tag cannot publish or create a tag. Builder commands retain `--publish never`.
+
+To run in GitHub: open **Actions > Build and Release Installers > Run workflow**, select **codex/integration-release-reliability** in the Branch selector, then **Run workflow**. Open that run, check Windows/mac-intel/mac-arm jobs independently, confirm **publish** is skipped, and download the three `installers-*` artifacts from its summary. GitHub may withhold the Run workflow button until the dispatch-enabled workflow exists on the default branch; do not merge or create tags just to work around that restriction. An authenticated REST dispatch against the feature branch can be attempted separately.
+
 - Removed duplicate `.github/workflows/build.yml`.
 - Kept `.github/workflows/build-release.yml` as the sole v-tag release workflow.
 - Added `workflow_call` to the existing test workflow. Release packaging has `needs: test`, using the same Windows Node 20/24 `npm ci` + `npm test` matrix as PR checks.

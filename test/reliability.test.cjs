@@ -252,6 +252,8 @@ test('release workflow is unique, test-gated and uses only declared npm scripts'
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json')));
   assert.match(workflow, /needs: test/);
   assert.match(workflow, /needs: build/);
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /if: \$\{\{ github\.event_name == 'push' && startsWith\(github\.ref, 'refs\/tags\/v'\) && needs\.build\.result == 'success' \}\}/);
   assert.match(workflow, /uses: \.\/\.github\/workflows\/test.yml/);
   assert.match(reusable, /workflow_call:/);
   assert.doesNotMatch(workflow, /macos-13|npm install/);
