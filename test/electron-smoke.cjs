@@ -60,6 +60,7 @@ app.whenReady().then(async () => {
     await js("window.__smokeErrors=[]; window.addEventListener('error', e=>window.__smokeErrors.push(e.message)); window.addEventListener('unhandledrejection', e=>window.__smokeErrors.push(String(e.reason))); window.alert=()=>{}; window.confirm=()=>true; void 0");
     check('real main/preload/renderer initialize and both banks load');
     check('renderer receives learning settings only, without service configuration', await js("Object.keys(config).sort().join(',')==='maxTokens,useLocalFallbackWhenApiFails'"));
+    await wait('[...document.images].every(i=>i.complete)');
     check('all initial images load', await js("[...document.images].every(i=>i.complete && i.naturalWidth>0)"));
     await js("$('beginTrack').click(); $('studentName').value='Synthetic Learner'; $('studentEmail').value='smoke@example.invalid'; $('studentEmail').dispatchEvent(new Event('input'))");
     // Let the existing 250ms saved-session lookup finish before this synthetic

@@ -48,5 +48,128 @@ Detailed baseline applicability is in [Task 4](DEPENDENCY_SECURITY.md).
 
 ## Implementation and verification
 
-Results will be added after the assessment above is committed and the migration
-is executed. No production service, release, tag or merge is part of this task.
+The assessment above was committed separately (`2a02c2c`) before installation.
+Exact implementation changes:
+
+- Pin Electron **44.9.0** in package.json/lockfile. Builder remains **26.15.3**;
+  all direct production dependency versions remain unchanged. Electron's required
+  downloader becomes `@electron/get@5.1.0`, with its maintained internal ZIP
+  extractor 1.0.5 and associated Node types/env-paths/undici/semver tree. No unrelated
+  dependency update or audit fix was performed.
+- Original 22-check smoke retains every assertion. One intermittently early image
+  check now waits for image `complete` before still requiring positive natural
+  width. This fixes an observed decoding race, not a missing-image regression.
+- `test/runtime-compatibility.cjs` adds four real-runtime checks: exact embedded
+  Electron and isolated sandbox/preload; generated WebAudio→MediaRecorder→FileReader
+  audio through real transcription IPC/main service with mocked upstream; synthesis
+  IPC contract; and actual muted blob playback plus application cancellation.
+  `npm run test:electron` runs the original smoke followed by these focused checks.
+- `test/validate-packaging.cjs` runs after builder on each native target. It checks
+  expected installer filename, invokes the packaged executable in Node mode to
+  assert **44.9.0**, and compares shipped main/preload/renderer/security/services,
+  HTML, both banks, PapaParse and the ebook byte-for-byte with the workspace.
+  Mac validation also checks declared minimum OS and logs microphone description
+  availability. The existing manual workflow runs this validation before upload;
+  tag-only publication conditions and `--publish never` commands are unchanged.
+
+**No application source/configuration, IPC contracts, CSP, assessment algorithms,
+question banks, thresholds, certificate evidence rules, app identity, Worker
+endpoints or SmartChats authentication/README credentials changed.** App version
+remains 0.7.0. No database, infrastructure or framework migration is involved.
+
+## Regression and desktop results
+
+- `npm ci`: passed from the updated lockfile on Windows (Node 24.15.0).
+- `npm test` and `npm run test`: each **58 passed, 0 failed**. These aliases run
+  the same suite; they are not 116 distinct tests.
+- `npm run test:electron`: original **22 passed, 0 failed**, plus **4 passed,
+  0 failed** targeted runtime/media checks. Actual process reported Electron
+  **44.9.0**, Chromium **152.0.7977.167**, Node **24.22.0**.
+- Seven stages, SmartChats external-opening IPC, actual CSV import, actual Word
+  libraries/import/export, fallback, reload restoration, certificate rejection,
+  literal HTML handling, inline/network CSP rejection and privileged IPC remain
+  covered by the unchanged expectations. Browser launching/native dialogs/provider
+  responses are doubles; a real external browser/service was not exercised.
+- An optional additional run cloned a closed **synthetic Electron 31** smoke profile
+  from Task 4 into a new temporary directory, leaving the source untouched. All
+  **7 focused checks passed**, including three extra checks for existing localStorage
+  completion, valid restored certificate export and rejection of manipulated flags.
+  This demonstrates one Windows synthetic profile upgrade, not universal profile
+  compatibility or safe downgrade. GPU command-buffer diagnostics appeared after
+  process shutdown in that optional run; exit was 0 and no failed assertion resulted.
+
+Physical microphone/camera, macOS privacy prompts, real voice quality and live
+transcription/synthesis remain unverified. Generated recording uses an oscillator
+connected only to a MediaStreamDestination (no physical input/speaker connection).
+Playback uses muted silent WAV. The synthesis provider double returns a header-only
+base64 response for transport validation; it is not a real decodable TTS output.
+Existing Node tests cover speech fallback/cancellation promises. OS speech-engine
+availability and audible system speech are not established by these tests.
+
+### Windows setup and verification
+
+```powershell
+Set-Location 'D:\200 - WorkingatHeights\work-at-heights'
+node --version # Node 24 LTS recommended, or 22.12+
+npm.cmd ci
+npm.cmd audit
+npm.cmd test
+npm.cmd run test
+npm.cmd run test:electron
+npm.cmd run dist:win -- --publish never
+node test/validate-packaging.cjs
+npm.cmd start
+```
+
+For a supplemental storage migration check, provide only a closed, synthetic
+Electron 31 profile (created before upgrading). The test copies it before opening:
+
+```powershell
+$env:WAH_LEGACY_PROFILE = 'C:\path\to\synthetic-electron31-profile'
+try { & .\node_modules\.bin\electron.cmd test/runtime-compatibility.cjs }
+finally { Remove-Item Env:WAH_LEGACY_PROFILE }
+```
+
+The optional profile must contain the smoke's `Synthetic Learner` /
+`smoke@example.invalid` completed session. Never supply a real learner profile.
+Back up production profiles before manually upgrading; rollback of Chromium's
+on-disk storage format is not guaranteed. No real profile is migrated by tests.
+
+## Security delta and remaining risks
+
+| Audit scope | Before | After |
+| --- | --- | --- |
+| Full npm tree | 12: 10 moderate, 2 high, 0 critical | **10 moderate, 0 high, 0 critical** |
+| Omit development dependencies | 3 moderate | **3 moderate**, unchanged |
+
+The Electron high record and obsolete `extract-zip` high record are cleared. The
+supported runtime brings the current Chromium/Node security patches and Electron
+fixes covering context bridge copying, isolation, permission origins, navigation,
+iframes/popups and platform-specific privileged APIs. Many previously listed
+advisories required unused features; do not interpret the count delta as two
+independently demonstrated exploits or proof that every Chromium issue is tracked
+by npm. No newly affected npm package appeared in the post-upgrade audit.
+
+Remaining moderate records: `sprintf-js`, `argparse`, `mammoth`, `roarr`,
+`global-agent`, builder's `@electron/get`, `app-builder-lib`, `dmg-builder`,
+`electron-builder-squirrel-windows`, `electron-builder`. These are the existing
+formatting advisory and inherited records. Runtime Mammoth's CLI path is not used
+by WAH; the other route is builder's binary download/proxy logging. No
+learner-controlled format string was identified. Upstream fixes, not forced
+Mammoth/builder downgrades or unrelated major overrides, remain the recommendation.
+`npm audit` exits nonzero while these advisories remain.
+
+Certificates still cannot authenticate a fully consistent forged local history;
+Task 3's documented provenance boundary is unchanged. Minimum-OS launches,
+signed/notarized installation, macOS Gatekeeper/Windows SmartScreen, physical
+microphone use, OS speech engines and live provider interactions require separate
+manual validation. A stable runtime still requires ongoing patch updates.
+
+## Nonpublishing packaging
+
+Local Windows x64 NSIS packaging passed with Electron 44.9.0 and builder 26.15.3.
+Expected file: `Working at Height Learning Track Setup 0.7.0.exe`.
+Native packaged-runtime execution and required ASAR content comparisons passed.
+Cross-platform workflow results will be recorded after the manual run completes.
+Building artifacts is not an installed-app or signing/notarization test. No
+production service, release, tag or merge is part of this task.

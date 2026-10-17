@@ -1,5 +1,8 @@
 # Dependency security and modernization — Task 4
 
+Historical Task 4 record. Current Electron selection, runtime compatibility,
+audit delta and packaging verification are in [Task 5](ELECTRON_RUNTIME_MODERNIZATION.md).
+
 Baseline: `main` at `081edd6` (PR #3 merged). Audit date: 2026-10-17.
 Scope: dependencies, lockfile, development/CI configuration and documentation only.
 Application code, seven stages, questions, scoring, SmartChats authentication,
