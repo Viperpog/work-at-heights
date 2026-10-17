@@ -21,6 +21,8 @@ dialog.showSaveDialog = async () => ({ canceled: false, filePath: path.join(temp
 dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path.join(temporary, 'vr.docx')] });
 shell.openExternal = async url => { external.push(url); };
 app.on('web-contents-created', (_event, contents) => {
+  // Keep synthetic-media timers deterministic when the test window is occluded.
+  contents.setBackgroundThrottling(false);
   contents.on('preload-error', (_event, _preload, error) => errors.push(String(error)));
   contents.on('render-process-gone', (_event, details) => errors.push(JSON.stringify(details)));
   contents.session.webRequest.onErrorOccurred(details => resources.push({ url: details.url, error: details.error }));
@@ -116,7 +118,53 @@ app.whenReady().then(async () => {
     await wait('questionBank.length===240 && finalQuizBank.length===240');
     await js("applySessionToState(loadSavedSession('smoke@example.invalid'))");
     check('localStorage survives reload; existing restore policy resets certificateDownloaded', await js('state.currentTab===7 && state.debriefingCompleted && !state.certificateDownloaded'));
-    console.log(`Electron smoke: ${passed} passed, 0 failed. AI/network and native dialogs mocked; no microphone test.`);
+    const savedCertificate = fs.readFileSync(path.join(temporary, 'certificate.docx'));
+    const certificateDenied = await js(`(async () => {
+      const forged=JSON.parse(JSON.stringify(state)); forged.debriefingCompleted=false;
+      try { await window.appApi.saveCertificate(forged); return false; } catch (_) { return true; }
+    })()`);
+    check('actual certificate IPC rejects incomplete evidence without replacing the export', certificateDenied && fs.readFileSync(path.join(temporary, 'certificate.docx')).equals(savedCertificate));
+    check('actual IPC rejects malicious external URL', await js("window.appApi.openExternal('javascript:alert(1)').then(()=>false,()=>true)"));
+    check('actual IPC rejects file traversal', await js("window.appApi.readJson('../package.json').then(()=>false,()=>true)"));
+    const injectionSafe = await js(`{
+      window.__injected=0;
+      window.__attack='<img src=x onerror="window.__injected=1"><script>window.__injected=1</script>';
+      state.debriefing.vrSummary=window.__attack; state.smartSummary=window.__attack;
+      renderVrStatus(); renderSmartResults();
+      document.getElementById('vrReportStatus').textContent.includes(window.__attack)
+        && document.getElementById('smartResults').textContent.includes(window.__attack)
+        && !document.querySelector('#vrReportStatus img, #vrReportStatus script, #smartResults img, #smartResults script');
+    }`);
+    check('hostile report/session markup remains literal text in real DOM', injectionSafe);
+    check('CSP rejects an actual inline script', await js(`(async()=>{
+      window.__inlineExecuted=0;
+      const element=document.createElement('script');element.textContent='window.__inlineExecuted=1';document.body.appendChild(element);
+      await new Promise(resolve=>setTimeout(resolve,50));element.remove();
+      return window.__inlineExecuted===0 && window.__injected===0;
+    })()`));
+    await js(`window.__networkViolation=false; document.addEventListener('securitypolicyviolation', e=>{
+      if(e.effectiveDirective==='connect-src')window.__networkViolation=true;
+    }); fetch('https://example.invalid/private').catch(()=>{}); true`);
+    await wait('window.__networkViolation');
+    check('CSP blocks renderer network connections');
+    await js(`window.__audioResult=null; window.__audioError=null; (async()=>{
+      // A short silent PCM WAV verifies blob media without relying on host capture devices.
+      const bytes=new Uint8Array(1644), view=new DataView(bytes.buffer);
+      const label=(offset,text)=>[...text].forEach((c,i)=>{bytes[offset+i]=c.charCodeAt(0);});
+      label(0,'RIFF');view.setUint32(4,1636,true);label(8,'WAVE');label(12,'fmt ');
+      view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);
+      view.setUint32(24,8000,true);view.setUint32(28,16000,true);view.setUint16(32,2,true);
+      view.setUint16(34,16,true);label(36,'data');view.setUint32(40,1600,true);
+      const blob=new Blob([bytes],{type:'audio/wav'});const url=URL.createObjectURL(blob);const audio=new Audio(url);
+      try {
+        await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Audio metadata timeout')),3000);
+          audio.onloadeddata=()=>{clearTimeout(timer);resolve();};audio.onerror=()=>{clearTimeout(timer);reject(new Error('Audio failed'));};audio.load();});
+        return blob.size>0 && audio.readyState>=2;
+      } finally {audio.pause();URL.revokeObjectURL(url);}
+    })().then(result=>{window.__audioResult=result;},error=>{window.__audioError=String(error);}); true`);
+    await wait('window.__audioResult!==null || window.__audioError!==null');
+    check('synthetic blob audio loading works under CSP', await js('window.__audioResult===true'));
+    console.log(`Electron smoke: ${passed} passed, 0 failed. AI/network and native dialogs mocked; synthetic blob audio only, no microphone or audible playback.`);
     console.log(`Temporary synthetic artifacts/profile: ${temporary}`);
     clearTimeout(timeout);
     app.exit(0);

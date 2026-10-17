@@ -6,7 +6,7 @@ const os = require('node:os');
 const vm = require('node:vm');
 const Papa = require('papaparse');
 const mammoth = require('mammoth');
-const { root, renderer, mainProcess, worker } = require('./helpers.cjs');
+const { root, renderer, mainProcess, completedState, worker } = require('./helpers.cjs');
 const bank = JSON.parse(fs.readFileSync(path.join(root, 'data/question-bank.json')));
 const quiz = JSON.parse(fs.readFileSync(path.join(root, 'data/final-quiz-bank.json')));
 
@@ -216,16 +216,12 @@ test('real document libraries export reports/certificate and import VR text with
   try {
     const h = renderer();
     h.run("state.studentName = 'Synthetic Learner'; state.studentEmail = 'learner@example.invalid'");
-    const state = h.json('state');
-    state.interview.history = [{ question: bank[0], answer: 'Synthetic answer', skipped: false,
-      evaluation: { score: 0, correctness: 'Incorrect', positiveReinforcement: 'Review', explanation: 'Synthetic explanation' } }];
-    state.quiz.history = [{ question: quiz[0], selectedText: 'Synthetic answer', correctText: quiz[0].options[quiz[0].correctIndex], correct: false, earnedPoints: 0 }];
-    state.debriefing.history = [{ role: 'user', text: 'Synthetic reflection' }];
+    const state = completedState();
     const main = mainProcess();
     for (const channel of ['save-interview-report', 'save-quiz-report', 'save-debriefing-report', 'save-certificate', 'save-ebook']) {
       const filePath = path.join(dir, `${channel}.docx`);
       main.dialog.showSaveDialog = async () => ({ canceled: false, filePath });
-      await main.handlers.get(channel)(null, state);
+      await main.handlers.get(channel)(... (channel === 'save-ebook' ? [] : [null, state]));
       const extracted = await mammoth.extractRawText({ path: filePath });
       assert.ok(extracted.value.length > 0, channel);
       if (channel !== 'save-ebook') assert.match(extracted.value, /Synthetic Learner/);

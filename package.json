@@ -6,7 +6,7 @@
   "author": "Alexandre Gomes de Siqueira",
   "license": "UNLICENSED",
   "scripts": {
-    "test": "node --test test/baseline.test.cjs test/reliability.test.cjs",
+    "test": "node --test test/baseline.test.cjs test/reliability.test.cjs test/security.test.cjs",
     "test:electron": "electron test/electron-smoke.cjs",
     "start": "electron .",
     "dist:win": "electron-builder --win nsis --x64"
