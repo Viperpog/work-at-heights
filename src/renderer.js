@@ -1459,59 +1459,114 @@ function makeSegue(prevEval, nextQuestion) {
     if (instructor.id === 'emily') return `Let's begin with Module ${nextQuestion.module}: ${nextQuestion.moduleTitle}. You're not just choosing an answer here. I want to hear your reasoning and how you would keep the team safe.\n\n${nextQuestion.question}`;
     return `Let's get started with Module ${nextQuestion.module}: ${nextQuestion.moduleTitle}. Good field decisions come from noticing the right details, so walk me through your thinking.\n\n${nextQuestion.question}`;
   }
-  let prefix = prevEval.correctness === 'Correct'
-    ? `Based on that, I am going to continue at a stronger level of reasoning.`
-    : `Let's use that as a learning moment and continue with a foundational prompt in the next module.`;
-  if (instructor.id === 'carlos') {
-    prefix = prevEval.correctness === 'Correct'
-      ? `Exacto. That is disciplined thinking. Now I am raising the level, so stay sharp.`
-      : `Mira, that answer is not tight enough yet. We are stepping back to rebuild the foundation before you move on.`;
-  } else if (instructor.id === 'beatrice') {
-    prefix = prevEval.correctness === 'Correct'
-      ? `Well now, that was solid. You kept your safety thinking where it belongs, so let us make it a little more demanding.`
-      : `Now listen, that part needs shoring up. We are going to step back and make sure this foundation is safe and sound.`;
-  } else if (instructor.id === 'emily') {
-    prefix = prevEval.correctness === 'Correct'
-      ? `Nice work. You explained enough of your reasoning that we can move into a stronger question.`
-      : `That gives us a useful starting point. Let's reinforce the foundation together before we raise the difficulty.`;
-  } else if (instructor.id === 'jake') {
-    prefix = prevEval.correctness === 'Correct'
-      ? `Good catch. That is the kind of reasoning we want in the field, so I am going to increase the challenge.`
-      : `Let's walk through that again at a foundation level. There is a field decision here that needs to be clearer.`;
-  }
-  return `${prefix}\n\nNow let's shift to Module ${nextQuestion.module}: ${nextQuestion.moduleTitle}.\n\n${nextQuestion.question}`;
+  const previousModule = state.interview.history.at(-1)?.question.module;
+  const transition = previousModule === nextQuestion.module ? "Let's continue in" : "Now let's move to";
+  return `${transition} Module ${nextQuestion.module}: ${nextQuestion.moduleTitle}.\n\n${nextQuestion.question}`;
 }
 
-function personaReinforcement(correctness) {
-  const instructor = getSelectedInstructor();
-  if (instructor.id === 'carlos') {
-    return correctness === 'Correct'
-      ? 'Exacto. That is the level of discipline I expect.'
-      : 'Mira, not enough yet. Your safety reasoning needs to be sharper and more precise.';
+// Editorial paraphrases keyed by exact bank text: not a second question bank or
+// scoring rubric. Unknown points are quoted as supplied, never filled from AI.
+const interviewTeachingClauses = Object.freeze({
+  'NR-35 applies above 2.0 meters with risk of falling': 'NR-35 applies above 2.0 meters where there is a risk of falling',
+  'planning organization and execution': 'the work needs planning, organization and execution',
+  'protects workers directly and indirectly involved': 'protection covers workers directly and indirectly involved',
+  'weather connects to risk assessment and external influences': 'weather belongs in risk assessment as an external influence',
+  'organization implements preventive measures and risk assessment': 'the organization implements preventive measures and risk assessment',
+  'worker follows NR-35 and employer procedures': 'workers follow NR-35 and employer procedures',
+  'authorized worker is trained, clinically fit, and approved': 'an authorized worker is trained, clinically fit and approved',
+  'organization suspends unforeseen hazardous work': 'the organization suspends unforeseen hazardous work',
+  'initial training before work begins minimum eight hours': 'initial training takes at least eight hours before work begins',
+  'training covers risk assessment restrictive conditions PPE emergencies': 'training covers risk assessment, restrictive conditions, PPE and emergencies',
+  'periodic training every two years minimum eight hours': 'periodic training takes at least eight hours every two years',
+  'qualified instruction and health evaluation support authorization': 'qualified instruction and health evaluation support authorization',
+  'avoid work at height first, then eliminate fall risk, then minimize consequences': 'first avoid work at height, then eliminate fall risk, then minimize consequences',
+  'every work at height activity needs Risk Assessment': 'every work-at-height activity needs Risk Assessment',
+  'Risk Assessment includes adverse weather, communication, supervision, emergency planning': 'Risk Assessment covers adverse weather, communication, supervision and emergency planning',
+  'non-routine work requires Work Permit': 'non-routine work requires a Work Permit',
+  'adverse weather must be considered in Risk Assessment': 'Risk Assessment must consider adverse weather',
+  'external influences may change worksite conditions': 'external influences can change site conditions',
+  'restrictive conditions may prevent start or continuation': 'restrictive conditions can prevent starting or continuing work',
+  'suspend work when unforeseen hazardous condition cannot be eliminated or neutralized': 'suspend work if an unforeseen hazard cannot be eliminated or neutralized',
+  'do not invent wind or rain thresholds based only on NR-35': 'do not infer wind or rain limits from NR-35 alone',
+  'Fall Protection System mandatory when work at height cannot be avoided': 'a Fall Protection System is mandatory when work at height cannot be avoided',
+  'system selected according to Risk Assessment by qualified safety professional': 'a qualified safety professional selects the system according to Risk Assessment',
+  'collective protection considered before personal protection when applicable': 'consider collective protection before personal protection when applicable',
+  'fall arrest planning considers free fall distance fall factor impact force and clearance': 'fall-arrest planning considers free-fall distance, fall factor, impact force and clearance',
+  'initial routine and periodic inspections are required': 'initial, routine and periodic inspections are required',
+  'routine inspection before work begins': 'routine inspection happens before work begins',
+  'defective degraded deformed or fall impact equipment must be discarded unless restoration allowed': 'discard defective, degraded, deformed or fall-impacted equipment unless restoration is allowed',
+  'rope access equipment and cords inspected before use and at least every six months': 'inspect rope-access equipment and cords before use and at least every six months',
+  'organization establishes emergency response procedures': 'the organization establishes emergency response procedures',
+  'Risk Assessment considers emergency rescue and first aid to reduce inert suspension time': 'Risk Assessment considers rescue and first aid to reduce inert suspension time',
+  'procedures consider rescue hazards team sizing estimated rescue time equipment and systems': 'procedures cover rescue hazards, team size, estimated rescue time, equipment and systems',
+  'rescue personnel must be trained first aid capable and fit': 'rescuers must be trained, first-aid capable and fit'
+});
+const interviewSafetyConnections = Object.freeze({
+  1: 'These points connect planning and changing conditions to protection from falls.',
+  2: 'This connects safe work to authorization, procedures and preventive measures.',
+  3: 'These checks support training and fitness before authorization.',
+  4: 'This connects fall prevention to the risks and controls in the work plan.',
+  5: 'Changing conditions can make starting or continuing work unsafe.',
+  6: 'These choices connect fall protection to the risks and available clearance.',
+  7: 'Inspections identify equipment that needs attention before use.',
+  8: 'Planning rescue and first aid helps reduce time in inert suspension.'
+});
+function demonstratedFeedbackPoint(point, answer) {
+  // Deliberately stricter than the UNCHANGED keyword scoring below. This only
+  // controls whether feedback acknowledges a point, never credit/progression.
+  const normalize = text => String(text).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  if (normalize(answer) === normalize(point)) return true;
+  if (/\b(no|not|never|cannot|without)\b|n't\b/i.test(answer)) return false;
+  const stopWords = new Set(['a','an','and','the','to','of','with','for','is','in','at','on','as','be','when','from','by']);
+  const words = normalize(point).split(' ').filter(word => !stopWords.has(word) && !/^\d+$/.test(word));
+  const answerWords = new Set(normalize(answer).split(' '));
+  const numbers = point.match(/\d+(?:\.\d+)?/g) || [];
+  const suppliedNumbers = (answer.match(/\d+(?:\.\d+)?/g) || []).map(Number);
+  return words.length > 0 && words.every(word => answerWords.has(word))
+    && numbers.every(number => suppliedNumbers.includes(Number(number)));
+}
+function withInterviewFeedback(evaluation, question, answer, skipped = false) {
+  const variation = Number(String(question.id || '').split('-').at(-1)) || question.module || 1;
+  if (evaluation.correctness === 'Correct' && !skipped) {
+    const alternatives = {
+      carlos: ['That is clear, disciplined safety reasoning.', 'Exacto. You identified the safety requirements clearly.'],
+      beatrice: ['That is right. You kept the safety decision clear.', 'Well explained. You covered the expected safety points.'],
+      emily: ['Good work. You connected the key safety points clearly.', 'You explained the expected safety reasoning clearly.'],
+      jake: ['Good catch. You identified the key safety points.', 'That is clear safety reasoning for the field.']
+    };
+    const choices = alternatives[getSelectedInstructor().id] || alternatives.jake;
+    const message = choices[variation % choices.length];
+    return { ...evaluation, positiveReinforcement: message, explanation: '', improvementGuidanceText: '', interviewerMessage: message };
   }
-  if (instructor.id === 'beatrice') {
-    return correctness === 'Correct'
-      ? 'That is right, honey. You kept the safety decision clear and steady.'
-      : 'Well now, you are on the path, but we need to make that answer safer and clearer before I let it pass.';
-  }
-  if (instructor.id === 'emily') {
-    return correctness === 'Correct'
-      ? 'Good work. You explained that clearly and connected it to safe practice.'
-      : 'You are on the right track. Let us strengthen the safety concept behind your answer.';
-  }
-  return correctness === 'Correct'
-    ? 'Good catch. You connected your answer to the safety logic we need in the field.'
-    : 'Good start. Let us walk through the field decision that still needs to be stronger.';
+  const points = Array.isArray(question.expectedAnswerPoints) ? question.expectedAnswerPoints : [];
+  const partial = evaluation.correctness === 'Partially Correct' && !skipped;
+  const demonstrated = partial ? points.filter(point => demonstratedFeedbackPoint(point, answer)) : [];
+  const missing = points.filter(point => !demonstrated.includes(point));
+  const acknowledgments = { carlos: ['The essential requirements are:', 'Mira, here are the essentials:'], beatrice: ['Here is what matters for safety:', 'Well now, here are the essentials:'], emily: ['Here are the key safety points:', 'The key concepts are:'], jake: ['Here is the safety reasoning:', 'Here are the essentials for the field:'] };
+  let acknowledgment = skipped ? 'Thanks for saying so. ' : '';
+  acknowledgment += (acknowledgments[getSelectedInstructor().id] || acknowledgments.jake)[variation % 2];
+  if (partial) acknowledgment = demonstrated.length
+    ? `You identified that ${interviewTeachingClauses[demonstrated[0]] || demonstrated[0]}. The important additions are:`
+    : 'There are important points to add:';
+  if (partial && points.length && !missing.length) acknowledgment = 'You named the expected concepts.';
+  const clauses = missing.map(point => interviewTeachingClauses[point] || point);
+  const middle = Math.ceil(clauses.length / 2);
+  const sentence = values => values.length ? values.join('; ').replace(/^./, character => character.toUpperCase()) + '.' : '';
+  // No truncation: retain qualifiers/numbers and all missing bank points. Four
+  // or five concise clauses fit the editorial target or a safety-led exception.
+  const explanation = [sentence(clauses.slice(0, middle)), sentence(clauses.slice(middle)),
+    points.length && points.every(point => Object.hasOwn(interviewTeachingClauses, point)) ? interviewSafetyConnections[question.module] || '' : ''].filter(Boolean).join(' ');
+  const fallback = points.length ? 'Their application to this question needs clarification.'
+    : 'A reliable explanation is not available for this question.';
+  return { ...evaluation, positiveReinforcement: acknowledgment, explanation: explanation || fallback,
+    improvementGuidanceText: '', interviewerMessage: `${acknowledgment} ${explanation || fallback}` };
 }
 
 function localEvaluate(question, answer, skipped=false) {
-  if (skipped) return {
+  if (skipped) return withInterviewFeedback({
     score: 0, correctness: 'Skipped', isCorrect: false,
-    positiveReinforcement: getSelectedInstructor().id === 'carlos' ? 'Good. Honesty is better than pretending, but now you need to review this.' : getSelectedInstructor().id === 'beatrice' ? 'That is alright, honey. Better to say you do not know than make up a safety answer.' : getSelectedInstructor().id === 'jake' ? 'Good call being honest. In the field, guessing is how people get hurt.' : 'Thank you for being honest. That gives us a safe place to review from.',
-    explanation: `This concept is important in Module ${question.module}. Review the recommended chapters before continuing.`,
-    improvementGuidanceText: 'Review the concept and try to connect it to practical work-at-height decisions.',
     recommendations: question.recommendedChapters
-  };
+  }, question, answer, true);
   const text = answer.toLowerCase();
   const points = question.expectedAnswerPoints || [];
   const hits = points.filter(p => p.toLowerCase().split(/\W+/).filter(w => w.length > 4).some(w => text.includes(w))).length;
@@ -1519,15 +1574,10 @@ function localEvaluate(question, answer, skipped=false) {
   let correctness = 'Incorrect', score = 0, isCorrect = false;
   if (ratio >= .55 || (question.difficulty === 'basic' && ratio >= .35)) { correctness = 'Correct'; score = question.maxScore; isCorrect = true; }
   else if (ratio >= .25) { correctness = 'Partially Correct'; score = Math.max(.5, question.maxScore / 2); }
-  return {
+  return withInterviewFeedback({
     score, correctness, isCorrect,
-    positiveReinforcement: personaReinforcement(correctness),
-    explanation: correctness === 'Correct'
-      ? 'Your answer included enough of the expected safety reasoning for this level.'
-      : `A stronger answer should mention: ${points.slice(0,3).join('; ')}.`,
-    improvementGuidanceText: `Recommended review: ${question.recommendedChapters.map(c => `Module ${c.module} ${c.chapter} ${c.topic}`).join('; ')}.`,
     recommendations: question.recommendedChapters
-  };
+  }, question, answer);
 }
 
 function extractJsonObject(text) {
@@ -1576,13 +1626,7 @@ function buildConversationContext() {
 
 async function evaluateWithApi(question, answer, skipped=false) {
   if (skipped) {
-    const ev = localEvaluate(question, answer, true);
-    ev.interviewerMessage = `${ev.positiveReinforcement}
-
-${ev.explanation}
-
-${ev.improvementGuidanceText || ''}`;
-    return ev;
+    return localEvaluate(question, answer, true);
   }
 
   const instructor = getSelectedInstructor();
@@ -1620,9 +1664,14 @@ Conversation requirements for nextInterviewerMessage:
 - Stay fully in the selected instructor persona: ${instructor.systemStyle}
 - Sound like an experienced Senior Safety Instructor.
 - Start by reacting to the learner's answer.
-- Briefly explain what was strong or missing.
-- Do not ask the next bank question. The app will add the next question after your feedback.
-- Keep it concise, warm, and professional.
+- Explain the essential correct answer and its safety relevance using only the supplied expected points.
+- For partial correctness, acknowledge the accurate part and explain missing points without repeating understood information.
+- For correct answers, give brief positive reinforcement without a lecture.
+- For incorrect answers, aim for 2–3 explanatory sentences, generally 35–65 words; accuracy takes priority over padding or truncation.
+- Do not promise another attempt, review, repetition, a module revisit or application to a next question. Never invent future progression instructions.
+- The application alone introduces the actual next question/module. End the current-answer explanation naturally without a forced encouragement sentence.
+- Persona must not override factual grounding, conciseness or this current-answer-only contract.
+- The application constrains learner-facing teaching text to bank-backed wording; your score and correctness fields are evaluated independently.
 
 Recent interview context:
 ${JSON.stringify(buildConversationContext())}
@@ -1654,19 +1703,13 @@ Learner answer: ${answer}`;
           || evaluation.recommendations.some(r => !r || typeof r.module !== 'number' || typeof r.chapter !== 'string' || typeof r.topic !== 'string')))) {
         throw new Error('Invalid interview evaluation response.');
       }
-      return normalizeEvaluation(parsed, question);
+      return withInterviewFeedback(normalizeEvaluation(parsed, question), question, answer);
     }
 
     throw new Error('Chat service is unavailable. Restart the application and retry.');
   } catch (e) {
     if (config.useLocalFallbackWhenApiFails) {
-      const ev = localEvaluate(question, answer, false);
-      ev.interviewerMessage = `${ev.positiveReinforcement}
-
-${ev.explanation}
-
-${ev.improvementGuidanceText || ''}`;
-      return ev;
+      return localEvaluate(question, answer, false);
     }
     throw e;
   }
