@@ -61,7 +61,11 @@ app.whenReady().then(async () => {
     check('real main/preload/renderer initialize and both banks load');
     check('renderer receives learning settings only, without service configuration', await js("Object.keys(config).sort().join(',')==='maxTokens,useLocalFallbackWhenApiFails'"));
     check('all initial images load', await js("[...document.images].every(i=>i.complete && i.naturalWidth>0)"));
-    await js("$('beginTrack').click(); $('studentName').value='Synthetic Learner'; $('studentEmail').value='smoke@example.invalid'; $('studentEmail').dispatchEvent(new Event('input')); $('openSmartChats').click(); $('completeLearning').click()");
+    await js("$('beginTrack').click(); $('studentName').value='Synthetic Learner'; $('studentEmail').value='smoke@example.invalid'; $('studentEmail').dispatchEvent(new Event('input'))");
+    // Let the existing 250ms saved-session lookup finish before this synthetic
+    // learner creates a new session; otherwise it can resume its own rapid run.
+    await js('new Promise(resolve=>setTimeout(resolve,300))');
+    await js("$('openSmartChats').click(); $('completeLearning').click()");
     await wait('state.currentTab===2');
     check('orientation/navigation and SmartChats launch IPC', external.length === 1 && external[0].includes('smoke%40example.invalid'));
     await js(`{
