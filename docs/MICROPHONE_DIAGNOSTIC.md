@@ -11,7 +11,8 @@ npm run diagnostic:microphone
 This is a separate Electron entry point under `dev/`, excluded by the packaging
 allowlist. It uses a temporary profile, a sandboxed isolated preload, exact
 document/sender/resource allowlists, audio-only permissions and the existing
-main-process service client/configuration. The normal learner app is unchanged.
+main-process service client/configuration. For the integrated learner controls,
+see [Learner microphone selection](LEARNER_MICROPHONE.md).
 
 1. Grant microphone permission to reveal input labels. Check the OS default label.
 2. Record the displayed non-sensitive sentence using **System default**, then Stop.

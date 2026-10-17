@@ -14,7 +14,7 @@
     "start": "electron .",
     "dist:win": "electron-builder --win nsis --x64",
     "diagnostic:microphone": "electron dev/microphone/main.cjs",
-    "test:microphone": "node --test test/microphone.test.cjs && electron test/microphone-electron.cjs"
+    "test:microphone": "node --test test/microphone.test.cjs && electron test/microphone-electron.cjs && electron test/learner-microphone.cjs"
   },
   "dependencies": {
     "docx": "^8.5.0",

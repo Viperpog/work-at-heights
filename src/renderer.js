@@ -314,6 +314,7 @@ function setVoiceWaitIndicator(active, message = 'Preparing voice...') {
 }
 
 function refreshVoiceControls() {
+  refreshMicrophoneControls();
   if ($('toggleVoiceMode')) {
     $('toggleVoiceMode').textContent = voiceState.enabled ? 'Disable Voice Interview' : 'Enable Voice Interview';
     $('toggleVoiceMode').classList.toggle('active', voiceState.enabled);
@@ -543,6 +544,130 @@ async function toggleDebriefVoiceAnswer() {
   await toggleVoiceAnswer();
 }
 
+// Device IDs remain local, separate from learner sessions and provider payloads.
+const microphoneState = { deviceId: '', inputs: [], busy: false, local: null, url: null, request: 0, ready: false };
+const microphonePreferenceKey = 'wah.microphoneDeviceId';
+function microphoneMessage(text) {
+  for (const prefix of ['interview', 'debrief']) if ($(prefix + 'MicrophoneStatus')) $(prefix + 'MicrophoneStatus').textContent = text;
+}
+function microphoneError(error) {
+  if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') return 'Microphone permission denied. Allow microphone access in Windows privacy settings, or continue typing.';
+  if (['NotFoundError', 'OverconstrainedError', 'NotReadableError'].includes(error?.name)) return 'Selected microphone is unavailable, disconnected, or in use. Reconnect it or choose another microphone. No other microphone was selected automatically.';
+  return 'Microphone recording failed. Check your microphone, try Test microphone, or continue typing.';
+}
+function refreshMicrophoneControls() {
+  if (!microphoneState.ready) return;
+  const locked = !voiceState.supportedRecording || microphoneState.busy || !!microphoneState.local || voiceState.recording || voiceState.transcribing;
+  for (const prefix of ['interview', 'debrief']) {
+    const select = $(prefix + 'Microphone'); if (!select) continue;
+    select.replaceChildren(new Option('System default' + (microphoneState.inputs.find(input => input.deviceId === 'default')?.label ? ' — ' + microphoneState.inputs.find(input => input.deviceId === 'default').label : ''), ''));
+    for (const [index, input] of microphoneState.inputs.entries()) if (input.deviceId && input.deviceId !== 'default') select.append(new Option(input.label || `Microphone ${index + 1} (grant access to show name)`, input.deviceId));
+    if (microphoneState.deviceId && !microphoneState.inputs.some(input => input.deviceId === microphoneState.deviceId)) select.append(new Option('Saved microphone unavailable — reconnect or choose another', microphoneState.deviceId));
+    select.value = microphoneState.deviceId; select.disabled = locked;
+    $(prefix + 'MicrophoneRefresh').disabled = locked;
+    $(prefix + 'MicrophoneTest').disabled = locked;
+    $(prefix + 'MicrophoneStop').disabled = !microphoneState.local || microphoneState.local.stopping;
+  }
+}
+async function refreshMicrophones() {
+  try {
+    microphoneState.inputs = (await navigator.mediaDevices.enumerateDevices()).filter(device => device.kind === 'audioinput');
+    refreshMicrophoneControls();
+    if (microphoneState.deviceId && !microphoneState.inputs.some(input => input.deviceId === microphoneState.deviceId)) microphoneMessage('Saved microphone is unavailable. Reconnect it or choose another microphone; there is no automatic fallback.');
+  } catch (_) { microphoneMessage('Could not list microphones. Check microphone access or continue typing.'); }
+}
+function microphoneConstraints() {
+  return { audio: microphoneState.deviceId ? { deviceId: { exact: microphoneState.deviceId } } : true };
+}
+async function acquireMicrophone() {
+  const stream = await navigator.mediaDevices.getUserMedia(microphoneConstraints());
+  const active = 'Microphone used: ' + (stream.getAudioTracks()[0]?.label || 'System default (name unavailable)');
+  if (microphoneState.ready) for (const prefix of ['interview', 'debrief']) $(prefix + 'MicrophoneActive').textContent = active;
+  microphoneMessage('Microphone ready. Use Test microphone to check the sound.');
+  await refreshMicrophones();
+  return stream;
+}
+function clearLocalMicrophoneTest() {
+  microphoneState.request++;
+  const local = microphoneState.local; microphoneState.local = null;
+  if (local) {
+    local.discarded = true; clearTimeout(local.timer); cancelAnimationFrame(local.animation);
+    if (local.recorder.state === 'recording') local.recorder.stop();
+    local.stream.getTracks().forEach(track => track.stop()); local.context?.close().catch(() => {});
+  }
+  for (const prefix of ['interview', 'debrief']) {
+    const audio = microphoneState.ready && $(prefix + 'MicrophonePlayback'); if (audio) { audio.pause(); audio.removeAttribute('src'); audio.load(); }
+  }
+  if (microphoneState.url) URL.revokeObjectURL(microphoneState.url); microphoneState.url = null;
+  refreshMicrophoneControls();
+}
+async function startLocalMicrophoneTest() {
+  if (microphoneState.busy || microphoneState.local || voiceState.recording || voiceState.transcribing) return;
+  clearLocalMicrophoneTest(); cancelInterviewerSpeech();
+  const request = microphoneState.request; microphoneState.busy = true; refreshMicrophoneControls();
+  let stream, context;
+  try {
+    stream = await acquireMicrophone();
+    if (request !== microphoneState.request) { stream.getTracks().forEach(track => track.stop()); return; }
+    const type = getSupportedAudioMimeType(); const recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+    context = new AudioContext(); await context.resume();
+    if (request !== microphoneState.request) { stream.getTracks().forEach(track => track.stop()); await context.close(); return; }
+    const analyser = context.createAnalyser(); analyser.fftSize = 1024; context.createMediaStreamSource(stream).connect(analyser);
+    const local = { stream, recorder, context, chunks: [], peak: 0, discarded: false, stopping: false };
+    microphoneState.local = local;
+    const measure = () => { if (local.discarded || local.stopping) return; const data = new Uint8Array(analyser.fftSize); analyser.getByteTimeDomainData(data); for (const value of data) local.peak = Math.max(local.peak, Math.abs(value - 128)); local.animation = requestAnimationFrame(measure); }; measure();
+    recorder.ondataavailable = event => { if (!local.discarded && event.data.size) local.chunks.push(event.data); };
+    recorder.onstop = () => {
+      clearTimeout(local.timer); cancelAnimationFrame(local.animation); stream.getTracks().forEach(track => track.stop()); context.close().catch(() => {});
+      if (local.discarded) return;
+      microphoneState.local = null;
+      const blob = new Blob(local.chunks, { type: recorder.mimeType || type || 'audio/webm' });
+      microphoneState.url = URL.createObjectURL(blob);
+      for (const prefix of ['interview', 'debrief']) $(prefix + 'MicrophonePlayback').src = microphoneState.url;
+      microphoneMessage(local.peak < 1 ? 'No detectable microphone input. Check the selected device and volume, then test again. Audio stayed local.' : 'Test recorded. Play it back to confirm your microphone. Audio stayed local; nothing was sent or submitted.');
+      refreshMicrophoneControls();
+    };
+    recorder.onerror = () => { clearLocalMicrophoneTest(); microphoneMessage('Microphone test recording failed. Choose a working microphone and try again.'); };
+    for (const track of stream.getAudioTracks()) track.addEventListener('ended', () => { if (local.discarded || microphoneState.local !== local) return; clearLocalMicrophoneTest(); microphoneMessage('Microphone disconnected. Reconnect it or choose another microphone.'); });
+    recorder.start(250); local.timer = setTimeout(stopLocalMicrophoneTest, 10000);
+    microphoneMessage('Local microphone test: say “The orange safety helmet is beside the blue ladder.” Press Stop test when finished (10-second limit).');
+  } catch (error) { stream?.getTracks().forEach(track => track.stop()); context?.close().catch(() => {}); if (request === microphoneState.request) microphoneMessage(microphoneError(error)); }
+  finally { microphoneState.busy = false; refreshMicrophoneControls(); }
+}
+function stopLocalMicrophoneTest() {
+  const local = microphoneState.local; if (!local || local.stopping) return;
+  local.stopping = true; if (local.recorder.state === 'recording') local.recorder.stop(); refreshMicrophoneControls();
+}
+function setupMicrophones() {
+  try { const saved = localStorage.getItem(microphonePreferenceKey); if (typeof saved === 'string' && saved.length <= 1024) microphoneState.deviceId = saved; } catch (_) { /* OS default when storage is unavailable. */ }
+  for (const [prefix, statusId] of [['interview','voiceStatus'], ['debrief','debriefVoiceStatus']]) {
+    const panel = document.createElement('div'); panel.className = 'microphoneSettings';
+    const label = document.createElement('label'); label.htmlFor = prefix + 'Microphone'; label.textContent = 'Your microphone';
+    const select = document.createElement('select'); select.id = label.htmlFor;
+    select.onchange = () => { const selected = select.value; clearLocalMicrophoneTest(); microphoneState.deviceId = selected; microphoneMessage('Microphone selected. Use Test microphone to check it.'); try { if (selected) localStorage.setItem(microphonePreferenceKey, selected); else localStorage.removeItem(microphonePreferenceKey); } catch (_) { microphoneMessage('Microphone selected for this session; preference could not be saved.'); } refreshMicrophoneControls(); };
+    panel.append(label, select);
+    for (const [suffix, text, action] of [['Refresh','Show / refresh microphones',async () => {
+      if (microphoneState.busy) return; microphoneState.busy = true; refreshMicrophoneControls(); let stream;
+      try { stream = await acquireMicrophone(); } catch (error) { microphoneMessage(microphoneError(error)); } finally { stream?.getTracks().forEach(track => track.stop()); microphoneState.busy = false; refreshMicrophoneControls(); }
+    }], ['Test','Test microphone',startLocalMicrophoneTest], ['Stop','Stop test',stopLocalMicrophoneTest], ['Cancel','Discard test',() => { clearLocalMicrophoneTest(); microphoneMessage('Local microphone test discarded.'); }]]) {
+      const button = document.createElement('button'); button.id = prefix + 'Microphone' + suffix; button.type = 'button'; button.className = 'secondary'; button.textContent = text; button.onclick = action; panel.append(button);
+    }
+    const status = document.createElement('p'); status.id = prefix + 'MicrophoneStatus'; status.className = 'hint'; status.setAttribute('role','status'); status.textContent = 'Choose a microphone or use System default. Test audio stays on this computer.';
+    const active = document.createElement('p'); active.id = prefix + 'MicrophoneActive'; active.className = 'hint'; active.textContent = 'Microphone used: not yet tested';
+    const playback = document.createElement('audio'); playback.id = prefix + 'MicrophonePlayback'; playback.controls = true; playback.setAttribute('aria-label','Local microphone test playback'); panel.append(active, status, playback);
+    $(statusId).before(panel);
+  }
+  microphoneState.ready = true;
+  navigator.mediaDevices?.addEventListener('devicechange', async () => {
+    await refreshMicrophones();
+    if (microphoneState.deviceId && !microphoneState.inputs.some(input => input.deviceId === microphoneState.deviceId)) {
+      clearLocalMicrophoneTest();
+      if (voiceState.recording) { voiceState.microphoneError = 'Selected microphone disconnected. Reconnect it or choose another microphone.'; voiceState.audioChunks = []; voiceState.speechDetected = false; stopVoiceRecording(); }
+    }
+  });
+  if (navigator.mediaDevices?.enumerateDevices) refreshMicrophones();
+  window.addEventListener('beforeunload', clearLocalMicrophoneTest);
+}
 function setupVoiceFeatures() {
   voiceState.supportedSpeech = typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
   voiceState.supportedNaturalSpeech = Boolean(window.appApi && window.appApi.synthesizeSpeech);
@@ -553,6 +678,7 @@ function setupVoiceFeatures() {
     if ($('voiceStatus')) $('voiceStatus').textContent = 'Voice is optional. Choose an instructor, press the microphone, and answer aloud.';
     if ($('debriefVoiceStatus')) $('debriefVoiceStatus').textContent = 'Voice is optional. Press the microphone to record and submit your reflection.';
   }
+  setupMicrophones();
   refreshVoiceControls();
 }
 
@@ -705,6 +831,8 @@ function monitorSpeechAndAutoStop() {
 }
 
 async function startVoiceRecording() {
+  if (microphoneState.busy || microphoneState.local) { microphoneMessage('Stop the local microphone test before recording an answer.'); return; }
+  microphoneState.busy = true; refreshMicrophoneControls(); voiceState.microphoneError = '';
   try {
     if (voiceState.mode === 'debrief') {
       if ($('submitDebriefAnswer')) $('submitDebriefAnswer').disabled = true;
@@ -713,8 +841,13 @@ async function startVoiceRecording() {
       if ($('skipAnswer')) $('skipAnswer').disabled = true;
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = await acquireMicrophone();
     voiceState.mediaStream = stream;
+    for (const track of stream.getAudioTracks()) track.addEventListener('ended', () => {
+      if (!voiceState.recording) return;
+      voiceState.microphoneError = 'Microphone disconnected. Reconnect it or choose another microphone.';
+      voiceState.audioChunks = []; voiceState.speechDetected = false; stopVoiceRecording();
+    });
     voiceState.audioChunks = [];
     voiceState.speechDetected = false;
 
@@ -765,7 +898,8 @@ async function startVoiceRecording() {
         voiceState.audioChunks = [];
         voiceState.transcribing = false;
         refreshVoiceControls();
-        updateVoiceStatus('No clear speech was detected. Press the microphone and try again, or type your answer.');
+        const message = voiceState.microphoneError || 'No clear microphone input was detected. Check Your microphone and Test microphone, or type your answer.';
+        if (voiceState.mode === 'debrief') updateDebriefVoiceStatus(message); else updateVoiceStatus(message);
         if (voiceState.mode === 'debrief') {
           if ($('submitDebriefAnswer')) $('submitDebriefAnswer').disabled = false;
         } else {
@@ -782,7 +916,8 @@ async function startVoiceRecording() {
         await transcribeVoiceBlob(audioBlob);
       } catch (err) {
         console.warn('Voice operation failed.');
-        updateVoiceStatus('Transcription failed. Type your answer or try the microphone again.');
+        const message = 'Transcription service failed. Type your response or try again. Use Test microphone to check local audio.';
+        if (voiceState.mode === 'debrief') updateDebriefVoiceStatus(message); else updateVoiceStatus(message);
         if (voiceState.mode === 'debrief') {
           if ($('submitDebriefAnswer')) $('submitDebriefAnswer').disabled = false;
         } else {
@@ -823,7 +958,8 @@ async function startVoiceRecording() {
     }, maxRecordingMs);
   } catch (err) {
     console.warn('Voice operation failed.');
-    if (voiceState.mode === 'debrief') updateDebriefVoiceStatus('Microphone access failed. Allow microphone permission in the app/system settings, or type your reflection.'); else updateVoiceStatus('Microphone access failed. Allow microphone permission in the app/system settings, or type your answer.');
+    const message = microphoneError(err); microphoneMessage(message);
+    if (voiceState.mode === 'debrief') updateDebriefVoiceStatus(message); else updateVoiceStatus(message);
     stopVoiceRecording();
     if (voiceState.mode === 'debrief') {
       if ($('submitDebriefAnswer')) $('submitDebriefAnswer').disabled = false;
@@ -831,7 +967,7 @@ async function startVoiceRecording() {
       if ($('submitAnswer')) $('submitAnswer').disabled = false;
       if ($('skipAnswer')) $('skipAnswer').disabled = false;
     }
-  }
+  } finally { microphoneState.busy = false; refreshMicrophoneControls(); }
 }
 
 async function toggleVoiceAnswer() {
@@ -857,6 +993,7 @@ function stopNarrationForUserAction() {
 }
 
 function setTab(tab) {
+  clearLocalMicrophoneTest();
   stopNarrationForUserAction();
   state.currentTab = tab;
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
