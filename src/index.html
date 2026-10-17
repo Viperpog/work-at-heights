@@ -88,7 +88,12 @@
           <p class="heroSubtitle">Multimodal Training Experience</p>
         </div>
       </div>
+      <button id="audioSettingsButton" class="secondary audioSettingsButton" type="button" aria-label="Audio settings" aria-haspopup="dialog" aria-controls="audioSettings">⚙</button>
     </header>
+    <dialog id="audioSettings" aria-labelledby="audioSettingsTitle">
+      <div class="audioSettingsHeading"><h2 id="audioSettingsTitle">Audio settings</h2><button id="closeAudioSettings" class="secondary" type="button" aria-label="Close audio settings">Close</button></div>
+      <div id="audioSettingsContent"></div>
+    </dialog>
 
     <main class="layout">
       <aside class="status">
@@ -430,7 +435,7 @@
                 <button id="submitDebriefAnswer" class="primary">Submit Reflection</button>
                 <button id="debriefVoiceAnswer" class="secondary micButton" type="button" aria-label="Record voice reflection" title="Record voice reflection"><span aria-hidden="true" class="micIcon">🎙️</span><span class="srOnly">Record voice reflection</span></button>
               </div>
-              <p id="debriefVoiceStatus" class="hint voiceStatus">Voice is optional. Record once to transcribe and submit automatically.</p>
+              <p id="debriefVoiceStatus" class="hint voiceStatus">Voice is optional. Press the microphone to start; press it again to stop and send.</p>
             </div>
           </div>
           <div id="debriefComplete" class="panel successPanel hidden">
