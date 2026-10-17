@@ -12,7 +12,9 @@
     "test": "node --test test/baseline.test.cjs test/reliability.test.cjs test/security.test.cjs",
     "test:electron": "electron test/electron-smoke.cjs && electron test/runtime-compatibility.cjs",
     "start": "electron .",
-    "dist:win": "electron-builder --win nsis --x64"
+    "dist:win": "electron-builder --win nsis --x64",
+    "diagnostic:microphone": "electron dev/microphone/main.cjs",
+    "test:microphone": "node --test test/microphone.test.cjs && electron test/microphone-electron.cjs"
   },
   "dependencies": {
     "docx": "^8.5.0",
