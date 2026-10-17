@@ -46,12 +46,18 @@ does not demonstrate an API authentication failure.
 
 Normal answers keep their existing MIME preference, FileReader/base64 transport,
 recording limits, transcription endpoint, automatic submission after transcription,
-and assessment behavior. **Answer recording now uses manual start/stop:** press the
-microphone to start, speak with natural pauses, and press it again to stop/send.
-The previous pause-triggered stop and nine-second no-speech stop were removed.
-Maximum duration is still two minutes for interview / three for debriefing. Signal
-detection remains to reject empty/no-input recordings; it no longer ends answers
-on silence. Navigation discards an active recording. A local test deliberately
+and assessment behavior. **Standard answers use one press:** press the microphone,
+speak naturally, and WAH stops, transcribes and submits after four seconds of
+silence following detected speech. No second click is required; clicking again
+is only an optional early stop. Two-second thinking pauses are tolerated. The
+central `answerRecordingPolicy` replaces the aggressive 1.5-second cutoff with
+a four-second silence window, a two-second minimum and a fifteen-second no-speech
+timeout. Maximum duration remains two minutes for interview / three for debriefing.
+Pauses longer than four seconds may still end an answer; the default is an
+engineering choice, not validated speech-end recognition for all speakers.
+Signal detection rejects empty/no-input audio. Navigation or disabling voice
+cancels/discards capture, including pending acquisition. Finishing interviewer
+playback never starts capture automatically. A local test deliberately
 retains silence so it can be inspected. Its sampled
 peak indicator is diagnostic only. No IPC, CSP, credentials, Worker, provider or
 scoring changes were needed. Existing speaker/instructor voice behavior remains;
@@ -66,8 +72,8 @@ The lockfile and dependency versions are unchanged; npm reported the existing
 - `npm test`: 58 passed, 0 failed. One existing fixture now supplies the standard
   `MediaStream.getAudioTracks()` method; its assertions are unchanged.
 - `npm run test:electron`: 22 smoke + 4 runtime checks passed, 0 failed.
-- `npm run test:microphone`: 8 Node tests (including 5 playback lifecycle tests) +
-  21 developer diagnostic checks + 39 learner integration checks passed, 0 failed.
+- `npm run test:microphone`: 9 Node tests (including 6 audio lifecycle/boundary tests) +
+  21 developer diagnostic checks + 52 learner integration checks passed, 0 failed.
 
 The learner suite runs the actual main/preload/renderer with synthetic input
 devices/audio and a mocked provider. It checks default/exact constraints, shared
@@ -76,10 +82,18 @@ device changes/track loss, permission denial, local silence/playback, cleanup an
 absence of provider calls during tests. Existing security assertions remain.
 Automated permission denial and disconnection are fixtures, not actual OS events.
 
-Manual follow-up on the affected Windows computer: select TOZO T6, test and play
+Manual follow-up on the affected Windows computer: select the working headset, test and play
 back a sentence, restart the application and confirm the same choice, record an
 interview and debriefing answer, then disconnect/reconnect the headset and confirm
 there is no silent fallback. This change has not independently reverified physical
 hardware, full process-restart preference restoration, Bluetooth behavior or live
 transcription. The user reported successful TOZO recording/live transcription in
 the previous diagnostic; that is background evidence, not a new automated result.
+
+The user subsequently reported irregular interviewer dropouts with TOZO T6 used
+for both input and output, while Bose playback worked without the reported
+dropouts. Treat the tested TOZO T6/Windows/WAH combination as incompatible for now;
+try Bose or another headset if similar interruptions occur. This is not a finding
+about all TOZO products or all Bluetooth hardware. WAH does not block devices or
+change Windows settings, TTS provider/model/codec, or credentials. See
+[audio reliability notes](AUDIO_RELIABILITY.md) for comparison instructions.

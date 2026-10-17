@@ -5,8 +5,14 @@
 - Microphone settings now occupy a keyboard-accessible global header dialog;
   advanced local tests/playback are collapsed. The interview/debriefing retain
   their answer microphone buttons and existing short voice-status messages.
-- Answer recording is manual start/stop. The 1.5-second silence stop and
-  nine-second no-speech stop were removed. Two-/three-minute maxima, MIME order,
+- The compact header gear uses background `#29405C` and icon `#FFFFFF`, including
+  hover. Its specific selector overrides shared secondary-button colors.
+- Answer recording is one press with automatic stop/transcribe/submit.
+  `answerRecordingPolicy` centralizes RMS 10 (unchanged), minimum 2 s, sustained
+  silence 4 s and no-speech timeout 15 s. Four seconds allows brief thinking pauses
+  compared with the former 1.5-second cutoff; resumed speech resets the window.
+  It is a conservative engineering default, not universal speech-end recognition.
+  Two-/three-minute maxima, MIME order,
   transport, signal-presence detection and existing post-transcription assessment
   remain. Empty/no-signal and disconnected recordings do not submit answers.
 - The previous global capture-phase button listener canceled narration for every
@@ -18,10 +24,13 @@
   start fallback. New prompts cancel obsolete playback and release its blob URL.
 - The stopping/transcribing guard is set before recorder.stop(), preventing rapid
   restarts in the gap before its asynchronous stop event. Navigation discards
-  capture; pause detection does not terminate an answer.
+  capture; disabling voice/navigation also cancel pending capture acquisition.
+  Early manual stop remains optional. Completing interviewer playback never
+  activates the microphone automatically.
 
-These fixes have regression evidence. They do not prove the reported physical
-1.5-second TOZO interruptions are resolved. WAH requests a complete audio response
+These fixes have regression evidence. They do not prove TOZO playback is resolved.
+The user's latest report describes irregular TOZO dropouts and successful Bose
+playback. WAH requests a complete audio response
 per prompt, not timed 1.5-second playback chunks. No TTS provider/key changes.
 
 ## Development-only event diagnostics
@@ -51,6 +60,15 @@ recalling the provider request. No extra IPC or relaxed CSP is introduced.
 
 ## Bluetooth findings and physical protocol
 
+**User-reported physical comparison:** TOZO T6 produced irregular interviewer
+dropouts when used for both input and output; Bose playback worked without those
+dropouts. Treat the tested TOZO T6/current Windows/WAH combination as incompatible
+for now and try Bose or another headset if affected. This is not a universal
+Bluetooth or TOZO-product defect and does not establish a driver/profile cause.
+There is no device blocking, brand-specific code, TTS provider/model/codec/key
+change, or automatic Windows change. Bose success is the user's hardware evidence,
+not an additional automated or agent-performed listening test.
+
 Windows Bluetooth Classic normally uses A2DP for stereo playback and HFP for
 microphone plus mono playback. Activating capture can therefore change the audio
 format/routing. Newer LE Audio configurations can behave differently. This is a
@@ -58,7 +76,7 @@ plausible cause, not a measured TOZO finding. See Microsoft's
 [audio format guidance](https://learn.microsoft.com/en-us/windows/win32/coreaudio/communications-audio-format-capabilities).
 
 No physical routing/profile switch, endpoint transition, sample-rate change or
-earbud interruption was measured in this implementation. Browser track settings
+earbud interruption was independently measured in this implementation. Browser track settings
 describe the capture stream, not authoritative Bluetooth radio/driver profiles.
 Echo cancellation/gain/noise processing remain at the original browser defaults;
 do not infer profile switching solely from their values or a quality change.
@@ -79,8 +97,9 @@ unexpected-pause event. Do not send a full private DevTools log.
 For each: select the input in the gear panel, open Advanced, record/play a local
 sentence, then discard/close settings so all test tracks stop. Confirm the actual
 track label. Listen to a full interviewer prompt. Record an answer with a 2–3 second
-thinking pause; ensure recording continues until the second microphone click and
-transcribes once. Repeat in debriefing. Confirm smooth subsequent prompts and
+thinking pause; ensure recording continues, then finish speaking and allow four
+seconds of silence to stop/transcribe/submit once without a second click. Repeat
+in debriefing. Confirm smooth subsequent prompts and
 restart WAH to check preference persistence. Disconnect/reconnect the selected
 mic and verify the explicit unavailable state without fallback.
 
@@ -96,11 +115,18 @@ incorrect transcript alone.
 
 `npm ci` completes with unchanged dependency versions (10 existing moderate audit
 advisories). Baseline: 58 Node tests and 26 Electron checks. Microphone suite:
-8 Node tests, 21 standalone diagnostic checks, 39 learner Electron checks.
+9 Node tests, 21 standalone diagnostic checks, 52 learner Electron checks.
 Real Electron uses synthetic device/audio fixtures and mocked services; Node
 playback tests use controlled audio doubles. Max-duration tests invoke captured
 timer callbacks with original durations; they do not wait two/three minutes.
-Two-second silence, keyboard Escape/focus, empty audio, denial/disconnection,
+Two-second thinking pauses, deterministic four-second boundary/reset checks,
+automatic transcription and actual answer processing through existing fallback,
+no-speech callbacks, exact gear colors, keyboard Escape/focus, empty audio, denial/disconnection,
 duplicate starts, stale requests, fallback, cleanup and unchanged security/session
 restoration are covered. Hardware listening, real TOZO input/output combinations,
 driver behavior and live services remain unverified. Nothing merged/deployed.
+
+One initial learner-suite run timed out waiting for synthetic local-test analyser
+input. An unchanged rerun and the full clean-install verification passed; no
+assertions were weakened. Host audio initialization can still affect synthetic
+runtime checks. Physical Bose/TOZO findings above remain user-reported evidence.

@@ -4,7 +4,8 @@ const fs = require('node:fs'), path = require('node:path'), os = require('node:o
 const root = path.resolve(__dirname, '..');
 app.setAppPath(root); app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'wah-learner-mic-')));
 const requests = [];
-global.fetch = async (_url, options) => { requests.push(JSON.parse(options.body)); return Response.json({ text: '' }); };
+let transcript = '';
+global.fetch = async (_url, options) => { const body=JSON.parse(options.body); requests.push(body); return body.action==='transcribe' ? Response.json({ text: transcript }) : Response.json({content:'Synthetic malformed AI response to exercise existing fallback'}); };
 app.on('web-contents-created', (_, contents) => contents.setBackgroundThrottling(false));
 require('../src/main.js');
 app.whenReady().then(async () => {
@@ -13,7 +14,7 @@ app.whenReady().then(async () => {
   const check = (label, result) => { assert.ok(result, label); console.log(`PASS learner microphone ${++passed}: ${label}`); };
   const wait = async condition => { const until = Date.now() + 10000; while (!await js(condition)) { if (Date.now() > until) throw Error('Timed out: ' + condition); await new Promise(resolve => setTimeout(resolve, 40)); } };
   const fixture = async () => js(`window.__calls=[];window.__tracks=[];window.__contexts=[];window.__gains=[];window.__maxTimers=[];window.__denied=false;window.__silent=false;
-    window.__originalTimeout=window.setTimeout;window.setTimeout=(fn,ms,...args)=>{if(ms===120000||ms===180000)window.__maxTimers.push({fn,ms});return window.__originalTimeout(fn,ms,...args);};
+    window.__noSpeechTimers=[];window.__originalTimeout=window.setTimeout;window.setTimeout=(fn,ms,...args)=>{if(ms===120000||ms===180000)window.__maxTimers.push({fn,ms});if(ms===15000)window.__noSpeechTimers.push({fn,ms});return window.__originalTimeout(fn,ms,...args);};
     window.__devices=[{kind:'audioinput',deviceId:'default',label:'Default — Oculus Virtual Audio Device'},{kind:'audioinput',deviceId:'headset',label:'TOZO T6'},{kind:'audioinput',deviceId:'usb',label:'USB microphone'}];
     navigator.mediaDevices.enumerateDevices=async()=>window.__devices;
     navigator.mediaDevices.getUserMedia=async constraints=>{
@@ -27,6 +28,7 @@ app.whenReady().then(async () => {
     await wait("microphoneState.ready && !!document.getElementById('audioMicrophone')"); await fixture(); await wait('microphoneState.inputs.length===3');
     await js("document.getElementById('welcomePage').classList.add('hidden');document.getElementById('appShell').classList.remove('hidden');document.getElementById('audioSettingsButton').click();true");
     check('global settings opens accessible modal with testing collapsed',await js("document.getElementById('audioSettings').open && document.getElementById('audioSettings').getAttribute('aria-labelledby')==='audioSettingsTitle' && !document.querySelector('#audioSettings details').open && !document.querySelector('#interviewBox .microphoneSettings') && !document.querySelector('#tab6 .microphoneSettings')"));
+    check('header gear has requested colors and accessible name',await js("(()=>{const button=document.getElementById('audioSettingsButton'),style=getComputedStyle(button);return style.backgroundColor==='rgb(41, 64, 92)' && style.color==='rgb(255, 255, 255)' && button.getAttribute('aria-label')==='Audio settings';})()"));
     win.focus();win.webContents.sendInputEvent({type:'keyDown',keyCode:'Escape'});win.webContents.sendInputEvent({type:'keyUp',keyCode:'Escape'});await wait("!document.getElementById('audioSettings').open");
     await wait("document.activeElement===document.getElementById('audioSettingsButton')");
     check('Escape closes settings and restores keyboard focus',await js("document.activeElement===document.getElementById('audioSettingsButton')"));
@@ -70,6 +72,21 @@ app.whenReady().then(async () => {
       await js('window.__maxTimers.at(-1).fn();true');await wait('!voiceState.recording && !voiceState.transcribing');
       check(mode+' maximum timer transcribes nonempty audio exactly once',requests.length===beforeMax+1);
     }
+    await js("state.studentName='Synthetic Learner';state.studentEmail='audio@example.invalid';state.interview.activeQuestion=chooseQuestion(1,'basic');voiceState.enabled=false;true");
+    transcript='Synthetic spoken safety answer';
+    for(const mode of ['interview','debrief']) {
+      const beforeAuto=requests.filter(r=>r.action==='transcribe').length;
+      const beforeEvidence=await js(mode==='interview'?'state.interview.history.length':'state.debriefing.turn');
+      await js(`document.getElementById(${JSON.stringify(mode==='interview'?'voiceAnswer':'debriefVoiceAnswer')}).click();true`);await wait('voiceState.recording && voiceState.speechDetected');
+      check(mode+' one click starts capture and detects speech',await js('voiceState.recording && voiceState.speechDetected'));
+      await js('window.__gains.at(-1).gain.value=0;true');await new Promise(resolve=>setTimeout(resolve,2000));
+      check(mode+' one-press recording tolerates a two-second thinking pause',await js('voiceState.recording'));
+      await js('window.__gains.at(-1).gain.value=0.25;true');await new Promise(resolve=>setTimeout(resolve,250));await js('window.__gains.at(-1).gain.value=0;true');
+      await wait('!voiceState.recording && !voiceState.transcribing');
+      check(mode+' sustained silence transcribes and processes answer exactly once',requests.filter(r=>r.action==='transcribe').length===beforeAuto+1 && await js(mode==='interview'?'state.interview.history.length':'state.debriefing.turn')===beforeEvidence+1);
+      check(mode+' automatic completion releases tracks/timers without starting a new recording',await js('!voiceState.recording && !voiceState.mediaStream && !voiceState.audioContext && !voiceState.silenceCheckId && !voiceState.noSpeechTimer && !voiceState.maxRecordingTimer'));
+    }
+    transcript='';
     await js("window.__devices=window.__devices.filter(d=>d.deviceId!=='headset');navigator.mediaDevices.dispatchEvent(new Event('devicechange'));true"); await wait("!microphoneState.inputs.some(d=>d.deviceId==='headset')");
     check('disconnected saved selection remains visible without fallback', await js("microphoneState.deviceId==='headset' && document.getElementById('audioMicrophone').selectedOptions[0].textContent.includes('unavailable')"));
     const beforeMissing = requests.length; await js('startVoiceRecording();true'); await wait('!microphoneState.busy');
@@ -93,6 +110,17 @@ app.whenReady().then(async () => {
     await js('voiceState.speechDetected=false;stopVoiceRecording();true'); await wait('!voiceState.transcribing');
     const beforeEmpty=requests.length;await js('window.__silent=true;startVoiceRecording();true');await wait('voiceState.recording');await js('window.__maxTimers.at(-1).fn();true');await wait('!voiceState.recording && !voiceState.transcribing');
     check('maximum timer stops capture but never submits empty audio',requests.length===beforeEmpty&&await js("document.getElementById('voiceStatus').textContent.includes('No clear')"));
+    await js('startVoiceRecording();true');await wait('voiceState.recording');await js('window.__noSpeechTimers.at(-1).fn();true');await wait('!voiceState.recording && !voiceState.transcribing');
+    check('fifteen-second no-speech timer cancels without transcription',requests.length===beforeEmpty&&await js("document.getElementById('voiceStatus').textContent.includes('No speech detected') && window.__noSpeechTimers.at(-1).ms===15000"));
+    for(const mode of ['interview','debrief']) {
+      await js(`voiceState.mode=${JSON.stringify(mode)};voiceState.enabled=true;window.__silent=false;startVoiceRecording();true`);await wait('voiceState.recording && voiceState.speechDetected');
+      await js(mode==='interview'?'toggleVoiceMode();true':'toggleDebriefVoiceMode();true');await wait('!voiceState.recording && !voiceState.transcribing');
+      check(mode+' disabling voice cancels and discards without submitting',requests.length===beforeEmpty&&await js('window.__tracks.every(t=>t.readyState===\'ended\')'));
+    }
+    await js('window.__originalGetUserMedia=navigator.mediaDevices.getUserMedia;navigator.mediaDevices.getUserMedia=async constraints=>{const stream=await window.__originalGetUserMedia(constraints);return new Promise(resolve=>{window.__releaseCapture=()=>resolve(stream);});};startVoiceRecording();true');await wait('!!window.__releaseCapture');
+    await js('setTab(1);window.__releaseCapture();true');await wait('!microphoneState.busy');
+    check('navigation cancels pending capture acquisition and releases its tracks',requests.length===beforeEmpty&&await js("!voiceState.recording && window.__tracks.every(t=>t.readyState==='ended')"));
+    await js('navigator.mediaDevices.getUserMedia=window.__originalGetUserMedia;true');
     if(process.env.WAH_MICROPHONE_SCREENSHOT) {
       await js("document.getElementById('welcomePage').classList.add('hidden');document.getElementById('appShell').classList.remove('hidden');setTab(3);document.getElementById('audioSettingsButton').click();true");
       await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');

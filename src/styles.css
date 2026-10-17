@@ -1746,6 +1746,7 @@ button.secondary:hover:not(:disabled) {
 .microphoneSettings p, .microphoneSettings audio { flex-basis: 100%; width: 100%; }
 .topbar { position: relative; padding-right: 88px; }
 .audioSettingsButton { position: absolute; top: 16px; right: 16px; font-size: 24px; }
+.topbar button.audioSettingsButton, .topbar button.audioSettingsButton:hover:not(:disabled) { background: #29405C; color: #FFFFFF; }
 #audioSettings { width: min(520px, calc(100vw - 32px)); max-height: 85vh; overflow: auto; border: 1px solid var(--line); border-radius: 18px; padding: 20px; color: var(--ink); }
 #audioSettings::backdrop { background: #0f213780; }
 .audioSettingsHeading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }

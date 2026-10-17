@@ -274,6 +274,7 @@ const voiceState = {
   currentAudioUrl: null,
   finishPlayback: null,
   speechRequestId: 0,
+  recordingRequestId: 0,
   mode: 'interview'
 };
 
@@ -328,8 +329,8 @@ function refreshVoiceControls() {
     $('voiceAnswer').disabled = !voiceState.supportedRecording || voiceState.transcribing;
     $('voiceAnswer').replaceChildren(textNode('span', '🎙️', 'micIcon'), textNode('span', 'Record voice answer', 'srOnly'));
     $('voiceAnswer').firstChild.setAttribute('aria-hidden', 'true');
-    $('voiceAnswer').setAttribute('aria-label', voiceState.recording ? 'Stop recording and send answer' : 'Record voice answer');
-    $('voiceAnswer').title = voiceState.recording ? 'Recording. Click to stop and send.' : 'Record voice answer';
+    $('voiceAnswer').setAttribute('aria-label', voiceState.recording ? 'Stop recording early' : 'Record voice answer');
+    $('voiceAnswer').title = voiceState.recording ? 'Listening; stops after you finish. Click to stop early.' : 'Record voice answer';
     $('voiceAnswer').classList.toggle('active', voiceState.recording && voiceState.mode === 'interview');
   }
   if ($('toggleDebriefVoiceMode')) {
@@ -345,8 +346,8 @@ function refreshVoiceControls() {
     $('debriefVoiceAnswer').disabled = !voiceState.supportedRecording || voiceState.transcribing;
     $('debriefVoiceAnswer').replaceChildren(textNode('span', '🎙️', 'micIcon'), textNode('span', 'Record voice reflection', 'srOnly'));
     $('debriefVoiceAnswer').firstChild.setAttribute('aria-hidden', 'true');
-    $('debriefVoiceAnswer').setAttribute('aria-label', voiceState.recording ? 'Stop recording and send reflection' : 'Record voice reflection');
-    $('debriefVoiceAnswer').title = voiceState.recording ? 'Recording. Click to stop and send.' : 'Record voice reflection';
+    $('debriefVoiceAnswer').setAttribute('aria-label', voiceState.recording ? 'Stop recording early' : 'Record voice reflection');
+    $('debriefVoiceAnswer').title = voiceState.recording ? 'Listening; stops after you finish. Click to stop early.' : 'Record voice reflection';
     $('debriefVoiceAnswer').classList.toggle('active', voiceState.recording && voiceState.mode === 'debrief');
   }
 }
@@ -437,8 +438,8 @@ async function playNaturalInterviewerVoice(text, requestId) {
       if (requestId === voiceState.speechRequestId) {
         setVoiceWaitIndicator(false);
         updateVoiceStatus(voiceState.mode === 'debrief'
-          ? 'Voice debriefing enabled. Press the microphone to start; press again to stop and send.'
-          : 'Voice interview enabled. Press the microphone to start; press again to stop and send.');
+          ? 'Voice debriefing enabled. Press the microphone once; your answer is sent after you finish speaking.'
+          : 'Voice interview enabled. Press the microphone once; your answer is sent after you finish speaking.');
       }
       finish();
     };
@@ -540,10 +541,10 @@ function toggleDebriefVoiceMode() {
   voiceState.enabled = !voiceState.enabled;
   if (!voiceState.enabled) {
     cancelInterviewerSpeech();
-    stopVoiceRecording();
+    cancelVoiceRecording();
   }
   updateDebriefVoiceStatus(voiceState.enabled
-    ? 'Voice debriefing enabled. Press the microphone to start; press again to stop and send.'
+    ? 'Voice debriefing enabled. Press the microphone once; your answer is sent after you finish speaking.'
     : 'Voice debriefing disabled. Text reflection remains available.');
   refreshVoiceControls();
   if (voiceState.enabled) {
@@ -704,7 +705,7 @@ function setupVoiceFeatures() {
     updateVoiceStatus('Voice recording is unavailable. Text entry remains available.');
   } else {
     if ($('voiceStatus')) $('voiceStatus').textContent = 'Voice is optional. Choose an instructor, press the microphone, and answer aloud.';
-    if ($('debriefVoiceStatus')) $('debriefVoiceStatus').textContent = 'Voice is optional. Press the microphone to start; press again to stop and send your reflection.';
+    if ($('debriefVoiceStatus')) $('debriefVoiceStatus').textContent = 'Voice is optional. Press the microphone once; your reflection is sent after you finish speaking.';
   }
   setupMicrophones();
   refreshVoiceControls();
@@ -719,7 +720,7 @@ function toggleVoiceMode() {
   voiceState.enabled = !voiceState.enabled;
   if (!voiceState.enabled) {
     cancelInterviewerSpeech();
-    stopVoiceRecording();
+    cancelVoiceRecording();
   }
   updateVoiceStatus(voiceState.enabled
     ? 'Voice enabled. Press the microphone to answer aloud.'
@@ -822,10 +823,19 @@ function stopVoiceRecording() {
   refreshVoiceControls();
 }
 
+// Four seconds tolerates short thinking pauses; this is an audio boundary only,
+// unrelated to assessment scoring. Centralize timings for controlled tuning.
+const answerRecordingPolicy = Object.freeze({ speechRms: 10, minimumMs: 2000, silenceMs: 4000, noSpeechMs: 15000 });
+function cancelVoiceRecording() {
+  voiceState.recordingRequestId++;
+  voiceState.speechDetected = false; voiceState.audioChunks = [];
+  stopVoiceRecording();
+}
 function monitorSpeechSignal() {
   if (!voiceState.recording || !voiceState.analyser) return;
   const data = new Uint8Array(voiceState.analyser.fftSize);
-  const speechThreshold = 10;
+  const startedAt = performance.now();
+  let lastVoiceAt = startedAt;
 
   const tick = () => {
     if (!voiceState.recording || !voiceState.analyser) return;
@@ -837,9 +847,16 @@ function monitorSpeechSignal() {
     }
     const rms = Math.sqrt(sum / data.length);
 
-    if (rms > speechThreshold) {
+    const now = performance.now();
+    if (rms > answerRecordingPolicy.speechRms) {
       voiceState.speechDetected = true;
-      if (voiceState.mode === 'debrief') updateDebriefVoiceStatus('Recording your reflection. Press the microphone again to stop and send.'); else updateVoiceStatus('Recording your answer. Press the microphone again to stop and send.');
+      lastVoiceAt = now;
+      if (voiceState.mode === 'debrief') updateDebriefVoiceStatus('Listening to your reflection. It will be sent after you finish speaking.'); else updateVoiceStatus('Listening to your answer. It will be sent after you finish speaking.');
+    }
+    if (voiceState.speechDetected && now - startedAt >= answerRecordingPolicy.minimumMs && now - lastVoiceAt >= answerRecordingPolicy.silenceMs) {
+      audioTrace('speech ending detected');
+      if (voiceState.mode === 'debrief') updateDebriefVoiceStatus('Finished speaking. Transcribing your reflection...'); else updateVoiceStatus('Finished speaking. Transcribing your answer...');
+      stopVoiceRecording(); return;
     }
 
     voiceState.silenceCheckId = requestAnimationFrame(tick);
@@ -852,6 +869,7 @@ async function startVoiceRecording() {
   if (voiceState.recording || voiceState.transcribing || microphoneState.busy || microphoneState.local) { microphoneMessage('Finish the current audio operation before recording another answer.'); return; }
   if (voiceState.currentAudio || voiceState.audioPhase === 'speaking') audioTrace('capture/playback overlap prevented');
   cancelInterviewerSpeech('answer recording');
+  const recordingRequest = ++voiceState.recordingRequestId;
   microphoneState.busy = true; refreshMicrophoneControls(); voiceState.microphoneError = '';
   try {
     if (voiceState.mode === 'debrief') {
@@ -862,6 +880,7 @@ async function startVoiceRecording() {
     }
 
     const stream = await acquireMicrophone();
+    if (recordingRequest !== voiceState.recordingRequestId) { stream.getTracks().forEach(track => track.stop()); return; }
     voiceState.mediaStream = stream;
     for (const track of stream.getAudioTracks()) track.addEventListener('ended', () => {
       if (!voiceState.recording) return;
@@ -964,9 +983,15 @@ async function startVoiceRecording() {
     voiceState.recordingStartedAt = performance.now();
     audioPhase('recording'); audioTrace('recording start');
     refreshVoiceControls();
-    if (voiceState.mode === 'debrief') updateDebriefVoiceStatus('Recording your reflection. Press the microphone again to stop and send.'); else updateVoiceStatus('Recording your answer. Press the microphone again to stop and send.');
+    if (voiceState.mode === 'debrief') updateDebriefVoiceStatus('Listening. Speak your reflection; it will be sent after you finish.'); else updateVoiceStatus('Listening. Speak your answer; it will be sent after you finish.');
 
     monitorSpeechSignal();
+    voiceState.noSpeechTimer = setTimeout(() => {
+      if (voiceState.recording && !voiceState.speechDetected) {
+        voiceState.microphoneError = 'No speech detected. Check your microphone in Audio settings, then try again or type your answer.';
+        stopVoiceRecording();
+      }
+    }, answerRecordingPolicy.noSpeechMs);
     const maxRecordingMs = voiceState.mode === 'debrief' ? 180000 : 120000;
     voiceState.maxRecordingTimer = setTimeout(() => {
       if (voiceState.recording) {
@@ -1011,7 +1036,7 @@ function stopNarrationForUserAction() {
 }
 
 function setTab(tab) {
-  if (voiceState.recording) { voiceState.speechDetected = false; voiceState.audioChunks = []; stopVoiceRecording(); }
+  if (voiceState.recording || microphoneState.busy) cancelVoiceRecording();
   clearLocalMicrophoneTest();
   stopNarrationForUserAction();
   state.currentTab = tab;

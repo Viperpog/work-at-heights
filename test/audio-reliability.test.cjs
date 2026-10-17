@@ -56,3 +56,18 @@ test('current synthesis failure falls back once and cancellation settles system 
   await h.run("speakInterviewer('fallback sentence')");assert.equal(utterances.length,1);
   h.run("cancelInterviewerSpeech('recording')");await pending;assert.equal(h.run('voiceState.finishPlayback'),null);
 });
+test('automatic speech boundary tolerates thinking pauses and resets silence after resumed speech',()=>{
+  for(const mode of ['interview','debrief']) {
+    const h=renderer();let clock=0,frame;
+    h.context.performance={now:()=>clock};h.context.requestAnimationFrame=callback=>{frame=callback;return 1;};
+    h.run(`voiceState.mode=${JSON.stringify(mode)};voiceState.recording=true;window.__signal=128;window.__stops=0;voiceState.analyser={fftSize:1024,getByteTimeDomainData:data=>data.fill(window.__signal)};stopVoiceRecording=()=>{window.__stops++;voiceState.recording=false;};monitorSpeechSignal()`);
+    frame();assert.equal(h.run('voiceState.speechDetected'),false);
+    clock=100;h.run('window.__signal=148');frame();assert.equal(h.run('voiceState.speechDetected'),true);
+    clock=2500;h.run('window.__signal=128');frame();assert.equal(h.run('voiceState.recording'),true);
+    clock=3000;h.run('window.__signal=148');frame();
+    clock=6999;h.run('window.__signal=128');frame();assert.equal(h.run('voiceState.recording'),true);
+    clock=7000;frame();assert.equal(h.run('voiceState.recording'),false);assert.equal(h.run('window.__stops'),1);
+    frame();assert.equal(h.run('window.__stops'),1);
+    assert.deepEqual(h.json('answerRecordingPolicy'),{speechRms:10,minimumMs:2000,silenceMs:4000,noSpeechMs:15000});
+  }
+});
