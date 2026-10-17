@@ -7,7 +7,8 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const { Document, Packer, Paragraph } = require('docx');
 const mammoth = require('mammoth');
-const root = path.resolve(__dirname, '..');
+// Optionally exercise the exact packaged archive, with the same isolated profile.
+const root = process.env.WAH_PACKAGED_APP || path.resolve(__dirname, '..');
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'wah-electron-test-'));
 app.setPath('userData', path.join(temporary, 'profile'));
 app.setAppPath(root);
@@ -27,7 +28,7 @@ app.on('web-contents-created', (_event, contents) => {
   contents.on('render-process-gone', (_event, details) => errors.push(JSON.stringify(details)));
   contents.session.webRequest.onErrorOccurred(details => resources.push({ url: details.url, error: details.error }));
 });
-require('../src/main.js');
+require(path.join(root, 'src/main.js'));
 
 app.whenReady().then(async () => {
   const timeout = setTimeout(() => { console.error('FAIL Electron smoke timed out'); app.exit(1); }, 60000);
@@ -62,6 +63,24 @@ app.whenReady().then(async () => {
     check('renderer receives learning settings only, without service configuration', await js("Object.keys(config).sort().join(',')==='maxTokens,useLocalFallbackWhenApiFails'"));
     await wait('[...document.images].every(i=>i.complete)');
     check('all initial images load', await js("[...document.images].every(i=>i.complete && i.naturalWidth>0)"));
+    for (const [id, stem, voice] of [
+      ['jake', 'jake-miller', 'cedar'], ['emily', 'emily-carter', 'sage'],
+      ['carlos', 'carlos-rivera', 'onyx'], ['beatrice', 'beatrice-johnson', 'shimmer']
+    ]) {
+      await js(`openInstructorModal(); document.querySelector('#instructorModalChoices [data-instructor-id="${id}"]').click()`);
+      await wait('[...document.images].every(i=>i.complete)');
+      check(`${id} PNG loads in cards/modal and both headers with unchanged persona/voice`, await js(`(() => {
+        const instructor=getSelectedInstructor();
+        const images=[...document.querySelectorAll('[data-instructor-id="${id}"] img'), $('selectedInstructorImage'), $('selectedDebriefInstructorImage')];
+        return instructor.id==='${id}' && instructor.voice==='${voice}'
+          && images.length===document.querySelectorAll('.instructorChoices').length+2
+          && images.every(image=>image.src.endsWith('/${stem}.png') && image.naturalWidth>0 && image.naturalHeight>0 && image.alt==='Portrait of '+instructor.name)
+          && $('selectedInstructorName').textContent===instructor.name
+          && $('selectedDebriefInstructorName').textContent===instructor.name
+          && $('instructorModal').classList.contains('hidden');
+      })()`));
+    }
+    await js("selectInstructor('jake')");
     await js("$('beginTrack').click(); $('studentName').value='Synthetic Learner'; $('studentEmail').value='smoke@example.invalid'; $('studentEmail').dispatchEvent(new Event('input'))");
     // Let the existing 250ms saved-session lookup finish before this synthetic
     // learner creates a new session; otherwise it can resume its own rapid run.

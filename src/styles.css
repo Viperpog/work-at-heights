@@ -1314,6 +1314,7 @@ button.secondary:hover:not(:disabled) {
   width:54px;
   height:54px;
   object-fit:cover;
+  object-position:center top;
   border-radius:16px;
   border:1px solid var(--line);
   background:#fff;
