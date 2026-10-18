@@ -52,6 +52,61 @@ app.whenReady().then(async () => {
     check('offline bundled Inter loads', await js("document.fonts.check('16px Inter')"));
     check('all document identifiers remain unique', await js("(()=>{const ids=[...document.querySelectorAll('[id]')].map(node=>node.id);return ids.length===new Set(ids).size;})()"));
     await capture('00-welcome');
+    const captureWelcome = async name => {
+      if (!process.env.WAH_WELCOME_OUTPUT) return;
+      await js('document.fonts.ready.then(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))');
+      fs.mkdirSync(process.env.WAH_WELCOME_OUTPUT, { recursive: true });
+      fs.writeFileSync(path.join(process.env.WAH_WELCOME_OUTPUT, name + '.png'), (await win.webContents.capturePage()).toPNG());
+    };
+    check('welcome uses exact current Figma 22:2 copy', await js(`(() => {
+      const text = selector => document.querySelector(selector).textContent.replace(/\\s+/g,' ').trim();
+      return text('.welcomeBrand')==='WORK AT HEIGHTS'
+        && document.querySelector('.welcomeCard h1').innerText==='Work at\\nHeights'
+        && text('.welcomeHeroContent>.eyebrow')==='NR-35 / SAFETY TRAINING EXPERIENCE'
+        && text('.welcomeSubtitle')==='NR-35 Safety Training'
+        && document.querySelector('.posterCopy h2').innerText==='TRAIN FOR\\nWHAT MATTERS.'
+        && text('.posterCopy>p')==='Learn to identify hazards and make safer decisions with an immersive multimodal experience powered by AI.'
+        && [...document.querySelectorAll('.welcomeFeature strong')].map(n=>n.textContent).join('|')==='Discover the essentials|Test your judgment|Connect practice to action'
+        && [...document.querySelectorAll('.welcomeFeature>div>span')].map(n=>n.textContent).join('|')==='Learning modules, SmartChats and ebook|Safety interview and quiz|Virtual reality and guided debriefing'
+        && text('#beginTrack')==='Begin Training →'
+        && !/WorkatHeights|Working at Height|\\bVR\\b/i.test(text('#welcomePage'));
+    })()`));
+    check('welcome desktop composition matches approved frame geometry', await js(`(() => {
+      const near=(selector,x,y,w,h)=>{const r=document.querySelector(selector).getBoundingClientRect();return Math.abs(r.x-x)<2 && Math.abs(r.y-y)<2 && Math.abs(r.width-w)<2 && Math.abs(r.height-h)<2};
+      const at=(selector,x,y)=>{const r=document.querySelector(selector).getBoundingClientRect();return Math.abs(r.x-x)<2 && Math.abs(r.y-y)<2};
+      return near('.welcomeCard',69,111,1302,716) && near('.welcomePoster',853,111,518,462)
+        && near('.welcomeHighlights',95,580,1250,137) && near('#beginTrack',104,758,322,50)
+        && at('.welcomeCard h1',107,284) && at('.welcomeSubtitle',110,451)
+        && at('.posterCopy h2',892,201) && at('.posterCopy>p',892,326);
+    })()`));
+    check('welcome retains exact local image with approved opacity and crop', await js(`(() => {
+      const image=document.querySelector('.welcomePoster>img'), s=getComputedStyle(image), p=getComputedStyle(image.parentElement);
+      const r=image.getBoundingClientRect(), parent=image.parentElement.getBoundingClientRect();
+      return Math.abs(r.width/parent.width-1.1763)<.001 && Math.abs((r.left-parent.left)/parent.width+.0669)<.001
+        && image.complete && image.naturalWidth===1448 && image.naturalHeight===1086 && image.src.endsWith('/assets/design-v2/welcome-training.png')
+        && s.opacity==='0.2' && p.backgroundColor==='rgb(25, 57, 81)' && p.overflow==='hidden' && p.borderRadius==='21px';
+    })()`));
+    await captureWelcome('electron-1440x900');
+    for (const width of [1280,1024,760,480]) {
+      win.setContentSize(width,900);
+      check(`welcome fits ${width}px without horizontal overflow or clipped copy`, await js(`(() => {
+        const within=(child,parent)=>{const a=child.getBoundingClientRect(),b=parent.getBoundingClientRect();return a.left>=b.left-1 && a.right<=b.right+1 && a.top>=b.top-1 && a.bottom<=b.bottom+1 && child.scrollWidth<=child.clientWidth+1;};
+        const before=(first,second)=>document.querySelector(first).getBoundingClientRect().bottom<=document.querySelector(second).getBoundingClientRect().top;
+        return document.documentElement.scrollWidth<=innerWidth
+          && before('.welcomeHero','.welcomeHighlights') && before('.welcomeHighlights','.welcomeActions')
+          && before('.posterCopy h2','.posterCopy>p') && before('.welcomeCard h1','.welcomeSubtitle')
+          && [...document.querySelectorAll('.welcomeHeroContent h1,.welcomeHeroContent .eyebrow,.welcomeSubtitle,.posterCopy h2,.posterCopy>p')].every(n=>within(n,n.closest('.welcomeHeroContent,.welcomePoster')))
+          && [...document.querySelectorAll('.welcomeFeature>div')].every(n=>within(n,n.closest('.welcomeHighlights')))
+          && within(document.getElementById('beginTrack'),document.querySelector('.welcomeCard'));
+      })()`));
+      await captureWelcome('electron-'+width+'x900');
+      if (width===480) {
+        await js('window.scrollTo(0,document.documentElement.scrollHeight);true');
+        await captureWelcome('electron-480x900-lower');
+        await js('window.scrollTo(0,0);true');
+      }
+    }
+    win.setContentSize(1440,900);
     await require('./dialog-test-helpers.cjs').acceptNotices(win.webContents);
     await js("window.__lookupDone=false;window.__originalLookup=checkForSavedSessionAfterEmailEntry;checkForSavedSessionAfterEmailEntry=async()=>{try{return await window.__originalLookup();}finally{window.__lookupDone=true;}};$('beginTrack').click(); $('studentName').value='Synthetic Learner'; $('studentEmail').value='design@example.invalid'; refreshTab1(); true");
     await wait('window.__lookupDone');
