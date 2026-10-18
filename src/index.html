@@ -497,6 +497,14 @@
   </div>
 
   <script src="../node_modules/papaparse/papaparse.min.js"></script>
+  <dialog id="wahDialog" class="wahDialog" aria-labelledby="wahDialogTitle" aria-describedby="wahDialogBody wahDialogDetails">
+    <div class="wahDialogBrand"><span id="wahDialogIcon" aria-hidden="true"></span><p id="wahDialogEyebrow"></p></div>
+    <h2 id="wahDialogTitle"></h2>
+    <p id="wahDialogBody"></p>
+    <div id="wahDialogDetails" hidden><p id="wahDialogDetailLabel"></p><p id="wahDialogDetail"></p></div>
+    <div class="wahDialogActions"><button id="wahDialogPrimary" class="primary" type="button">OK</button><button id="wahDialogSecondary" class="secondary" type="button" hidden></button></div>
+  </dialog>
+  <script src="dialogs.js"></script>
   <script src="renderer.js"></script>
 
   <div id="instructorModal" class="modalOverlay hidden" role="dialog" aria-modal="true" aria-labelledby="instructorModalTitle">

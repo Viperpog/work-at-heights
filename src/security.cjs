@@ -25,7 +25,7 @@ function trustedSender(event, windows, documentURL) {
 function resourceAllowed(url, type, appPath) {
   if (type === 'media' && url.startsWith('blob:')) return true;
   const relative = {
-    mainFrame: ['src/index.html'], script: ['src/renderer.js', 'node_modules/papaparse/papaparse.min.js'],
+    mainFrame: ['src/index.html'], script: ['src/renderer.js', 'src/dialogs.js', 'node_modules/papaparse/papaparse.min.js'],
     stylesheet: ['src/styles.css'],
     font: ['src/assets/design-v2/Inter.ttf'],
     image: ['src/assets/logo.png', 'src/assets/wah-hero.png',

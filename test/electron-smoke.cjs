@@ -58,7 +58,8 @@ app.whenReady().then(async () => {
       else win.webContents.once('did-finish-load', resolve);
     });
     await wait("typeof state !== 'undefined' && questionBank.length === 240 && finalQuizBank.length === 240 && document.querySelectorAll('.instructorCard').length > 0");
-    await js("window.__smokeErrors=[]; window.addEventListener('error', e=>window.__smokeErrors.push(e.message)); window.addEventListener('unhandledrejection', e=>window.__smokeErrors.push(String(e.reason))); window.alert=()=>{}; window.confirm=()=>true; void 0");
+    await require('./dialog-test-helpers.cjs').acceptNotices(win.webContents);
+    await js("window.__smokeErrors=[]; window.addEventListener('error', e=>window.__smokeErrors.push(e.message)); window.addEventListener('unhandledrejection', e=>window.__smokeErrors.push(String(e.reason))); void 0");
     check('real main/preload/renderer initialize and both banks load');
     check('renderer receives learning settings only, without service configuration', await js("Object.keys(config).sort().join(',')==='maxTokens,useLocalFallbackWhenApiFails'"));
     await wait('[...document.images].every(i=>i.complete)');

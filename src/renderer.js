@@ -250,12 +250,23 @@ function renderVrStatus(analyzing = false) {
   }
 }
 
+function showInfo(message, title = 'Training notice') {
+  return window.wahDialogs.showInfo({ title, message });
+}
+async function confirmTrainingReset(returnFocus) {
+  return (await window.wahDialogs.showConfirm({
+    title: 'Start a new training session?',
+    message: 'Starting a new session will replace the current saved training progress. This action cannot be undone.',
+    detail: 'Your existing answers and completion record may be lost.',
+    primaryLabel: 'Keep My Progress', secondaryLabel: 'Start New Training', destructive: true, returnFocus
+  })) === 'secondary';
+}
 async function handleDocumentSave(operation, onSaved) {
   try {
     const result = await operation();
-    if (!result.canceled) onSaved(result);
+    if (!result.canceled) await onSaved(result);
   } catch (_) {
-    alert('Unable to save the document. Check completion evidence and choose a valid Word document destination.');
+    await showInfo('Unable to save the document. Check completion evidence and choose a valid Word document destination.', 'Unable to save document');
   }
 }
 
@@ -1117,6 +1128,8 @@ function updateCertificatePreview() {
 const SESSION_STORAGE_PREFIX = 'workingAtHeightSession:';
 const promptedSessionEmails = new Set();
 let restoringSession = false;
+let sessionRecoveryPending = false;
+let recoveryLookupEmail = '';
 
 function normalizedSessionEmail(email = state.studentEmail) {
   return String(email || '').trim().toLowerCase();
@@ -1132,7 +1145,7 @@ function cloneSessionState(source = state) {
 }
 
 function saveSession() {
-  if (restoringSession || !validEmail(state.studentEmail)) return;
+  if (restoringSession || sessionRecoveryPending || recoveryLookupEmail === normalizedSessionEmail() || !validEmail(state.studentEmail)) return;
   try {
     const snapshot = cloneSessionState(state);
     snapshot.savedAt = new Date().toISOString();
@@ -1278,7 +1291,8 @@ function rebuildInterfaceFromState(resumeTab = getFirstUnfinishedTab(state)) {
   setTab(resumeTab);
 }
 
-function checkForSavedSessionAfterEmailEntry() {
+async function checkForSavedSessionAfterEmailEntry() {
+  if (sessionRecoveryPending) return;
   const email = normalizedSessionEmail($('studentEmail') ? $('studentEmail').value : state.studentEmail);
   if (!validEmail(email) || promptedSessionEmails.has(email)) return;
   const saved = loadSavedSession(email);
@@ -1286,17 +1300,40 @@ function checkForSavedSessionAfterEmailEntry() {
   const resumeTab = getFirstUnfinishedTab(saved);
   if (resumeTab <= 1 && !saved.orientationCompleted) return;
   promptedSessionEmails.add(email);
-  const stepLabels = { 1: 'Orientation', 2: 'SmartChats', 3: 'Interview', 4: 'Quiz', 5: 'VR Experience Analysis', 6: 'Debriefing', 7: 'Certificate' };
-  const savedName = saved.studentName ? ` for ${saved.studentName}` : '';
-  const shouldContinue = window.confirm(`A previous training experience session was found${savedName}.\n\nContinue from Step ${resumeTab}: ${stepLabels[resumeTab]}?\n\nChoose OK to continue, or Cancel to start over.`);
-  if (shouldContinue) {
-    applySessionToState(saved);
-    saveSession();
-  } else {
-    clearSavedSession(email);
-    resetProgramForRetake();
-    state.studentEmail = email;
-    if ($('studentEmail')) $('studentEmail').value = email;
+  const stepLabels = { 1: 'Orientation', 2: 'SmartChats Analysis', 3: 'Adaptive Interview', 4: 'Knowledge Quiz', 5: 'VR Experience Analysis', 6: 'Debriefing', 7: 'Certificate' };
+  sessionRecoveryPending = true;
+  recoveryLookupEmail = '';
+  $('openSmartChats').disabled = true;
+  $('completeLearning').disabled = true;
+  try {
+    while (true) {
+      const choice = await window.wahDialogs.showSessionRecovery({
+        title: 'Welcome back', eyebrow: 'Saved training session', icon: '↻',
+        message: saved.studentName ? `We found a previous training session for ${saved.studentName}.` : 'We found a previous training session for you.',
+        detailLabel: 'Last saved activity', detail: `Step ${resumeTab} — ${stepLabels[resumeTab]}`,
+        primaryLabel: 'Continue Training', secondaryLabel: 'Start New Training'
+      });
+      if (normalizedSessionEmail($('studentEmail').value) !== email) { promptedSessionEmails.delete(email); return; }
+      if (choice === 'primary') {
+        sessionRecoveryPending = false;
+        applySessionToState(saved);
+        saveSession();
+        return;
+      }
+      if (choice === 'secondary' && await confirmTrainingReset()) {
+        if (normalizedSessionEmail($('studentEmail').value) !== email) { promptedSessionEmails.delete(email); return; }
+        sessionRecoveryPending = false;
+        clearSavedSession(email);
+        resetProgramForRetake();
+        state.studentEmail = email;
+        if ($('studentEmail')) $('studentEmail').value = email;
+        refreshTab1();
+        return;
+      }
+      // Keeping progress returns to the recovery choice without any state write.
+    }
+  } finally {
+    sessionRecoveryPending = false;
     refreshTab1();
   }
 }
@@ -1433,8 +1470,13 @@ function refreshTab1() {
   state.studentName = $('studentName').value.trim();
   state.studentEmail = $('studentEmail').value.trim();
   const ok = state.studentName.length > 1 && validEmail(state.studentEmail);
-  $('openSmartChats').disabled = !ok;
-  $('completeLearning').disabled = !ok;
+  if (!sessionRecoveryPending) {
+    const email = normalizedSessionEmail();
+    const saved = validEmail(state.studentEmail) && !promptedSessionEmails.has(email) ? loadSavedSession(email) : null;
+    recoveryLookupEmail = saved && !(getFirstUnfinishedTab(saved) <= 1 && !saved.orientationCompleted) ? email : '';
+  }
+  $('openSmartChats').disabled = !ok || Boolean(recoveryLookupEmail) || sessionRecoveryPending;
+  $('completeLearning').disabled = !ok || Boolean(recoveryLookupEmail) || sessionRecoveryPending;
   updateStatus();
   setTimeout(checkForSavedSessionAfterEmailEntry, 250);
 }
@@ -1761,7 +1803,7 @@ function finishInterview() {
 async function handleAnswer(skipped=false) {
   stopVoiceRecording();
   const answer = skipped ? "I don't know" : $('answerBox').value.trim();
-  if (!skipped && !answer) return alert('Please type an answer or select I Don\'t Know.');
+  if (!skipped && !answer) return showInfo('Please type an answer or select I Don\'t Know.', 'Answer needed');
   const q = state.interview.activeQuestion;
   addMsg('user', skipped ? "I don't know." : answer);
   $('answerBox').value = '';
@@ -1804,7 +1846,7 @@ ${segueText}`);
     setVoiceWaitIndicator(false);
     if (!skipped) $('answerBox').value = answer;
     updateVoiceStatus('Unable to evaluate this answer. Please retry, or select I Don\'t Know.');
-    alert('Unable to evaluate this answer. Please retry, or select I Don\'t Know.');
+    await showInfo('Unable to evaluate this answer. Please retry, or select I Don\'t Know.', 'Unable to evaluate answer');
   } finally {
     if (!state.interviewCompleted) {
       $('submitAnswer').disabled = false;
@@ -1924,7 +1966,7 @@ function finishQuizAdaptive() {
 function submitQuizAnswer() {
   const q = state.quiz.activeQuestion;
   const selected = document.querySelector('input[data-quiz-option="true"]:checked');
-  if (!selected) return alert('Please select an answer before continuing.');
+  if (!selected) return showInfo('Please select an answer before continuing.', 'Choose an answer');
   const selectedIndex = Number(selected.value);
   const correct = selectedIndex === q.correctIndex;
   const earnedPoints = correct ? q.points : 0;
@@ -2023,7 +2065,7 @@ async function summarizeVrReport() {
 async function analyzeVrReport() {
   let result;
   try { result = await window.appApi.selectVrReport(); }
-  catch (_) { alert('Unable to read this Word report. Select a valid .docx file within the supported size limits.'); return; }
+  catch (_) { await showInfo('Unable to read this Word report. Select a valid .docx file within the supported size limits.', 'Unable to read Word report'); return; }
   if (result.canceled) return;
   state.debriefing.vrReportFileName = result.fileName;
   state.debriefing.vrReportText = result.text || '';
@@ -2115,7 +2157,7 @@ async function startDebriefing() {
 async function submitDebriefingAnswer() {
   if (state.debriefingCompleted) return;
   const answer = $('debriefAnswerBox').value.trim();
-  if (!answer) return alert('Please type your reflection before continuing.');
+  if (!answer) return showInfo('Please type your reflection before continuing.', 'Reflection needed');
   $('debriefAnswerBox').value = '';
   $('submitDebriefAnswer').disabled = true;
   addDebriefMsg('user', answer);
@@ -2175,14 +2217,22 @@ async function init() {
   }
 
   if ($('retakeProgram')) {
-    $('retakeProgram').addEventListener('click', resetProgramForRetake);
+    $('retakeProgram').addEventListener('click', async () => {
+      if ($('retakeProgram').disabled) return;
+      $('retakeProgram').disabled = true;
+      try { if (await confirmTrainingReset($('retakeProgram'))) resetProgramForRetake(); }
+      finally {
+        $('retakeProgram').disabled = false;
+        if ($('retakeProgram').getClientRects().length) $('retakeProgram').focus({ preventScroll: true });
+      }
+    });
   }
 
   document.querySelectorAll('.tabs button').forEach(btn => btn.addEventListener('click', () => { if (!btn.disabled) setTab(Number(btn.dataset.tab)); }));
   $('studentName').addEventListener('input', refreshTab1);
   $('studentEmail').addEventListener('input', refreshTab1);
   $('openSmartChats').addEventListener('click', () => window.appApi.openExternal(`https://smartchats.info/course/whs?=${encodeURIComponent(state.studentEmail)}`));
-  $('downloadEbook').addEventListener('click', () => handleDocumentSave(() => window.appApi.saveEbook(), r => alert(`Ebook saved to ${r.filePath}`)));
+  $('downloadEbook').addEventListener('click', () => handleDocumentSave(() => window.appApi.saveEbook(), r => showInfo(`Ebook saved to ${r.filePath}`, 'Ebook saved')));
   $('completeLearning').addEventListener('click', () => { state.orientationCompleted = true; unlock(2); setTab(2); saveSession(); });
   $('smartCsv').addEventListener('change', e => {
     const file = e.target.files[0]; if (!file) return;
@@ -2198,6 +2248,13 @@ async function init() {
     }, error: () => {
       $('smartResults').removeAttribute('aria-busy');
       $('smartResults').textContent = 'Unable to read this CSV. Choose a readable CSV exported from SmartChats and try again.';
+      window.wahDialogs.showInfo({
+        title: 'Unable to read the CSV',
+        message: "We couldn't import the selected SmartChats file. Please choose a readable CSV export and try again.",
+        detail: 'No training progress has been changed.', primaryLabel: 'Choose Another CSV →'
+      }).then(choice => {
+        if (choice === 'primary') { $('smartCsv').value = ''; $('smartCsv').click(); }
+      });
     }});
   });
   $('completeSmart').addEventListener('click', () => { unlock(3); setTab(3); saveSession(); });
@@ -2233,19 +2290,19 @@ ${makeSegue(null, q)}`);
   });
   $('submitAnswer').addEventListener('click', () => handleAnswer(false));
   $('skipAnswer').addEventListener('click', () => handleAnswer(true));
-  $('exportInterview').addEventListener('click', () => { return handleDocumentSave(() => window.appApi.saveInterviewReport(state), r => { $('unlockQuiz').disabled = false; saveSession(); alert(`Report saved to ${r.filePath}`); }); });
+  $('exportInterview').addEventListener('click', () => { return handleDocumentSave(() => window.appApi.saveInterviewReport(state), r => { $('unlockQuiz').disabled = false; saveSession(); return showInfo(`Report saved to ${r.filePath}`, 'Interview report saved'); }); });
   $('unlockQuiz').addEventListener('click', () => { unlock(4); setTab(4); saveSession(); });
   $('startQuiz').addEventListener('click', startQuizAdaptive);
   $('submitQuizAnswer').addEventListener('click', submitQuizAnswer);
   $('nextQuizQuestion').addEventListener('click', continueQuiz);
-  $('exportQuiz').addEventListener('click', () => { return handleDocumentSave(() => window.appApi.saveQuizReport(state), r => { $('unlockVrAnalysis').disabled = false; saveSession(); alert(`Quiz report saved to ${r.filePath}`); }); });
+  $('exportQuiz').addEventListener('click', () => { return handleDocumentSave(() => window.appApi.saveQuizReport(state), r => { $('unlockVrAnalysis').disabled = false; saveSession(); return showInfo(`Quiz report saved to ${r.filePath}`, 'Quiz report saved'); }); });
   $('unlockVrAnalysis').addEventListener('click', () => { unlock(5); setTab(5); saveSession(); });
   $('uploadVrReport').addEventListener('click', analyzeVrReport);
   $('continueDebriefing').addEventListener('click', () => { unlock(6); setTab(6); saveSession(); });
   $('startDebrief').addEventListener('click', startDebriefing);
   $('submitDebriefAnswer').addEventListener('click', submitDebriefingAnswer);
-  $('exportDebrief').addEventListener('click', () => { return handleDocumentSave(() => window.appApi.saveDebriefingReport(state), r => { $('continueCertificate').disabled = false; saveSession(); alert(`Debriefing report saved to ${r.filePath}`); }); });
+  $('exportDebrief').addEventListener('click', () => { return handleDocumentSave(() => window.appApi.saveDebriefingReport(state), r => { $('continueCertificate').disabled = false; saveSession(); return showInfo(`Debriefing report saved to ${r.filePath}`, 'Debriefing report saved'); }); });
   $('continueCertificate').addEventListener('click', () => { unlock(7); updateCertificatePreview(); setTab(7); saveSession(); });
-  $('downloadCertificate').addEventListener('click', () => { updateCertificatePreview(); return handleDocumentSave(() => window.appApi.saveCertificate(state), r => { state.certificateDownloaded = true; updateStatus(); saveSession(); alert(`Certificate saved to ${r.filePath}`); }); });
+  $('downloadCertificate').addEventListener('click', () => { updateCertificatePreview(); return handleDocumentSave(() => window.appApi.saveCertificate(state), r => { state.certificateDownloaded = true; updateStatus(); saveSession(); return showInfo(`Certificate saved to ${r.filePath}`, 'Certificate saved'); }); });
 }
 init();

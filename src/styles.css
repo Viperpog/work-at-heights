@@ -274,6 +274,45 @@ summary { cursor:pointer; }
 .microphoneSettings select { flex:1 1 240px; min-width:0; max-width:100%; }
 .microphoneSettings p,.microphoneSettings audio,.microphoneSettings details { flex-basis:100%; width:100%; }
 .microphoneSettings summary { padding:12px 0; }
+/* Approved modal frames 30:2 / 30:123 / 30:243. Content grows for real text. */
+.wahDialog { width:min(560px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); margin:auto; padding:34px; border:0; border-radius:20px; color:#1f3144; background:var(--card); box-shadow:3px 13px 0 #0713224a,0 24px 64px #07132233; overflow:auto; }
+.wahDialog::backdrop { background:rgba(7,24,40,.63); }
+.wahDialog--light { padding-bottom:22px; }
+.wahDialog::before { content:''; position:absolute; top:0; left:24px; width:96px; height:4px; border-radius:2px; background:var(--accent); }
+.wahDialog--dark { width:min(590px,calc(100vw - 32px)); min-height:420px; background:#142b42; color:white; }
+.wahDialog--dark::before { background:#79dad1; }
+.wahDialogBrand { display:flex; gap:17px; align-items:flex-start; margin-bottom:20px; }
+#wahDialogIcon { width:54px; height:54px; flex:0 0 54px; border-radius:14px; display:grid; place-items:center; font-size:29px; font-weight:700; color:var(--accent); background:#e7f2f1; }
+#wahDialogEyebrow { margin:3px 0 0; font-size:11px; text-transform:uppercase; font-weight:700; color:var(--accent); }
+.wahDialog--dark #wahDialogIcon { color:#79dad1; background:#1d3850; }
+.wahDialog--dark #wahDialogEyebrow { color:#79dad1; }
+.wahDialog h2 { font-size:27px; line-height:1.25; margin:0 0 22px; overflow-wrap:anywhere; }
+.wahDialog--dark h2 { font-size:29px; margin-bottom:15px; }
+#wahDialogBody { white-space:pre-wrap; font-size:15px; line-height:1.4; color:#667989; margin:0 0 28px; }
+.wahDialog--dark #wahDialogBody { color:#b8cad2; min-height:42px; margin-bottom:21px; }
+.wahDialog--dark:has(.warning) h2 { margin-bottom:21px; }
+.wahDialog--dark:has(.warning) #wahDialogBody { margin-bottom:39px; }
+#wahDialogDetails { padding:15px 18px; border-radius:10px; background:#edf5f4; margin-bottom:12px; }
+#wahDialogDetailLabel { margin:0 0 8px; font-size:11px; text-transform:uppercase; font-weight:600; color:var(--accent); }
+#wahDialogDetail { white-space:pre-wrap; font-size:13px; margin:0; }
+.wahDialog--dark #wahDialogDetails { background:#0e2337; padding:15px 20px; margin-bottom:28px; }
+.wahDialog--dark #wahDialogDetailLabel { color:#79dad1; }
+.wahDialog--dark #wahDialogDetails:not(.warning) #wahDialogDetail { font-size:19px; font-weight:600; }
+.wahDialog--dark #wahDialogDetails.warning { background:#3f343b; color:#f3d5cb; }
+.wahDialogActions { display:flex; gap:15px; justify-content:flex-end; }
+.wahDialogActions button { min-height:48px; border-radius:10px; font-size:14px; padding:12px 20px; }
+.wahDialog--dark .wahDialogActions { margin-top:28px; }
+.wahDialog--dark:has(.warning) .wahDialogActions { margin-top:38px; }
+.wahDialog--dark .wahDialogActions button { flex:1; }
+.wahDialog--dark .wahDialogActions .secondary { background:#1d3850; color:white; }
+.wahDialog--dark .wahDialogActions .destructive { background:#6c3942; color:white; }
+.wahDialogActions [hidden],#wahDialogDetails[hidden],#wahDialogDetailLabel[hidden] { display:none; }
+@media(max-width:650px) {
+  .wahDialog { padding:26px 24px; }
+  .wahDialog h2,.wahDialog--dark h2 { font-size:25px; }
+  .wahDialogActions { flex-wrap:wrap; }
+  .wahDialogActions button { width:100%; flex-basis:100% !important; }
+}
 /* Welcome is the only full-bleed screen; its artwork is an exact Figma export. */
 .welcomePage { background:#10263a; min-height:100vh; padding-bottom:48px; }
 .welcomeBrand { background:#0a1724; color:white; min-height:62px; display:flex; align-items:center; justify-content:space-between; padding:16px 5%; gap:24px; }

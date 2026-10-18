@@ -52,7 +52,8 @@ app.whenReady().then(async () => {
     check('offline bundled Inter loads', await js("document.fonts.check('16px Inter')"));
     check('all document identifiers remain unique', await js("(()=>{const ids=[...document.querySelectorAll('[id]')].map(node=>node.id);return ids.length===new Set(ids).size;})()"));
     await capture('00-welcome');
-    await js("window.__lookupDone=false;window.__originalLookup=checkForSavedSessionAfterEmailEntry;checkForSavedSessionAfterEmailEntry=()=>{const result=window.__originalLookup();window.__lookupDone=true;return result;};$('beginTrack').click(); $('studentName').value='Synthetic Learner'; $('studentEmail').value='design@example.invalid'; refreshTab1(); window.alert=()=>{}; window.confirm=()=>true; true");
+    await require('./dialog-test-helpers.cjs').acceptNotices(win.webContents);
+    await js("window.__lookupDone=false;window.__originalLookup=checkForSavedSessionAfterEmailEntry;checkForSavedSessionAfterEmailEntry=async()=>{try{return await window.__originalLookup();}finally{window.__lookupDone=true;}};$('beginTrack').click(); $('studentName').value='Synthetic Learner'; $('studentEmail').value='design@example.invalid'; refreshTab1(); true");
     await wait('window.__lookupDone');
     check('existing orientation controls and sidebar navigation remain wired', await js("!$('openSmartChats').disabled && !document.querySelector('.status .tabs [data-tab=\"1\"]').disabled && $('statusName').textContent==='Synthetic Learner'"));
     await capture('01-orientation');

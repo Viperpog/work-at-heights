@@ -30,7 +30,9 @@ function renderer(api = {}) {
     createElement: tag => Object.assign(element(Symbol()), { tagName: tag.toUpperCase() }), createTextNode: text => ({ textContent: String(text) })
   };
   const context = vm.createContext({
-    document, window: { appApi: api }, console: { warn() {}, error() {}, log() {} },
+    document, window: { appApi: api, wahDialogs: {
+      showInfo: async () => 'primary', showConfirm: async () => 'primary', showSessionRecovery: async () => 'primary'
+    } }, console: { warn() {}, error() {}, log() {} },
     localStorage: {
       getItem: key => storage.get(key) ?? null,
       setItem: (key, value) => storage.set(key, value),
