@@ -134,7 +134,7 @@ test('invalid export payloads, huge text and protected destinations are rejected
   for (const input of [null, {}, { ...completedState(), studentName: 'x'.repeat(201) }]) await assert.rejects(main.handlers.get('save-interview-report')(null, input));
   const state = completedState(); state.debriefing.summary = 'x'.repeat(32001);
   await assert.rejects(main.handlers.get('save-debriefing-report')(null, state), /limits/);
-  main.dialog.showSaveDialog = async () => ({ canceled: false, filePath: path.join(root, 'src/attack.docx') });
+  main.dialog.showSaveDialog = async () => ({ canceled: false, filePath: path.join(root, 'src/attack.pdf') });
   await assert.rejects(main.handlers.get('save-certificate')(null, completedState()), /application files/);
   assert.equal(fs.existsSync(path.join(root, 'src/attack.docx')), false);
   main.dialog.showSaveDialog = async () => ({ canceled: false, filePath: path.join(os.tmpdir(), 'attack.exe') });
@@ -148,7 +148,7 @@ test('Word exports safely preserve XML metacharacters, Unicode and long text', a
     state.interview.history[0].answer = attack + 'x'.repeat(30000);
     state.interview.history[0].evaluation.explanation = attack + 'x'.repeat(30000);
     const main = mainProcess();
-    for (const channel of ['save-interview-report', 'save-quiz-report', 'save-debriefing-report', 'save-certificate']) {
+    for (const channel of ['save-interview-report', 'save-quiz-report', 'save-debriefing-report']) {
       const filePath = path.join(dir, channel + '.docx');
       main.dialog.showSaveDialog = async () => ({ canceled: false, filePath });
       await main.handlers.get(channel)(null, state);

@@ -134,13 +134,14 @@ app.whenReady().then(async () => {
     await waitForExport(output);
     await wait("!$('continueCertificate').disabled");
     await js("$('continueCertificate').click()");
-    output = 'certificate.docx';
+    output = 'certificate.pdf';
     await js("$('downloadCertificate').click()");
     await wait('state.certificateDownloaded');
-    for (const file of ['interview.docx', 'quiz.docx', 'debrief.docx', 'certificate.docx']) {
+    for (const file of ['interview.docx', 'quiz.docx', 'debrief.docx']) {
       assert.match((await mammoth.extractRawText({ path: path.join(temporary, file) })).value, /Synthetic Learner/);
     }
-    check('all report/certificate files contain synthetic learner and readable Word text');
+    check('all DOCX report files contain synthetic learner and readable Word text');
+    check('certificate export is PDF rather than Word', fs.readFileSync(path.join(temporary, 'certificate.pdf')).subarray(0,5).toString()==='%PDF-');
     await js('saveSession(); window.__smokeSaved=loadSavedSession(\'smoke@example.invalid\')');
     check('completed certificate flag is saved before restoration', await js('window.__smokeSaved.certificateDownloaded'));
     await js('resetProgramForRetake(); applySessionToState(window.__smokeSaved)');
@@ -153,12 +154,12 @@ app.whenReady().then(async () => {
     await wait('questionBank.length===240 && finalQuizBank.length===240');
     await js("applySessionToState(loadSavedSession('smoke@example.invalid'))");
     check('localStorage survives reload; existing restore policy resets certificateDownloaded', await js('state.currentTab===7 && state.debriefingCompleted && !state.certificateDownloaded'));
-    const savedCertificate = fs.readFileSync(path.join(temporary, 'certificate.docx'));
+    const savedCertificate = fs.readFileSync(path.join(temporary, 'certificate.pdf'));
     const certificateDenied = await js(`(async () => {
       const forged=JSON.parse(JSON.stringify(state)); forged.debriefingCompleted=false;
       try { await window.appApi.saveCertificate(forged); return false; } catch (_) { return true; }
     })()`);
-    check('actual certificate IPC rejects incomplete evidence without replacing the export', certificateDenied && fs.readFileSync(path.join(temporary, 'certificate.docx')).equals(savedCertificate));
+    check('actual certificate IPC rejects incomplete evidence without replacing the export', certificateDenied && fs.readFileSync(path.join(temporary, 'certificate.pdf')).equals(savedCertificate));
     check('actual IPC rejects malicious external URL', await js("window.appApi.openExternal('javascript:alert(1)').then(()=>false,()=>true)"));
     check('actual IPC rejects file traversal', await js("window.appApi.readJson('../package.json').then(()=>false,()=>true)"));
     const injectionSafe = await js(`{

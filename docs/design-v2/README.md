@@ -1,5 +1,9 @@
 # Modern Industrial Learning v2
 
+Current certificate export is PDF-only. See the [concise-debriefing/PDF follow-up](../debriefing-pdf/README.md)
+for the shared preview/print template, current verification and sample PDF. DOCX
+certificate references below describe the original v2 implementation before that follow-up.
+
 Implemented in native HTML/CSS/JavaScript from the approved [Figma review canvas](https://www.figma.com/design/V7F5upd1HOTEHGJgyo31qS?node-id=12-2).
 Started from main `ed64b27`, which includes the corrective feedback and approved portrait updates.
 

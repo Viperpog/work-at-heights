@@ -57,7 +57,7 @@ Files:
 
 The VM suite removes only the renderer's final automatic `init()` call in its in-memory copy; it does not copy/reimplement scoring algorithms. Its DOM doubles do not establish browser correctness. The separate Electron test supplies that additional evidence for one fallback/skip interview path and an all-correct quiz path. Other algorithm paths run in the Node suite.
 
-The document test creates and extracts real .docx reports/certificates and tests invalid Word input and canceled saves. It does not verify visual layout. Temporary unit artifacts are removed from their freshly created test-owned directory. Electron smoke artifacts and profile remain in the printed `wah-electron-test-*` temporary directory for review; they contain only synthetic data.
+The document test creates and extracts real .docx reports and tests invalid Word input and canceled saves. Certificate export is now PDF-only: the real Electron suite exercises Chromium printing, a development-only PDF parser, native-save success/cancel, malicious text, isolation and page count. See [PDF architecture, review artifacts and independent inspection](debriefing-pdf/README.md). Temporary unit artifacts are removed from their freshly created test-owned directory. Electron smoke artifacts and profile remain in the printed `wah-electron-test-*` temporary directory for review; they contain only synthetic data.
 
 ## Seven-stage verification
 
