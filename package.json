@@ -9,8 +9,8 @@
     "node": "^22.12.0 || ^24.0.0"
   },
   "scripts": {
-    "test": "node --test test/baseline.test.cjs test/reliability.test.cjs test/security.test.cjs test/interview-feedback.test.cjs",
-    "test:electron": "electron test/electron-smoke.cjs && electron test/runtime-compatibility.cjs && electron test/interview-feedback-electron.cjs",
+    "test": "node --test test/baseline.test.cjs test/reliability.test.cjs test/security.test.cjs test/interview-feedback.test.cjs test/dialogs.test.cjs",
+    "test:electron": "electron test/electron-smoke.cjs && electron test/runtime-compatibility.cjs && electron test/interview-feedback-electron.cjs && electron test/design-system-electron.cjs && electron test/dialogs-electron.cjs",
     "start": "electron .",
     "dist:win": "electron-builder --win nsis --x64",
     "diagnostic:microphone": "electron dev/microphone/main.cjs",
@@ -34,6 +34,7 @@
       "assets/**/*",
       "data/**/*",
       "docs/**/*",
+      "!docs/design-v2/screenshots/**/*",
       "package.json"
     ],
     "win": {

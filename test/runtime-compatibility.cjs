@@ -45,7 +45,8 @@ app.whenReady().then(async () => {
       && await js("typeof require==='undefined' && typeof process==='undefined' && Object.isFrozen(window.appApi)"));
     console.log(JSON.stringify({ electron: process.versions.electron, chromium: process.versions.chrome, node: process.versions.node }));
     if (process.env.WAH_LEGACY_PROFILE) {
-      await js("window.alert=()=>{}; window.confirm=()=>true; window.__legacy=loadSavedSession('smoke@example.invalid'); true");
+      await require('./dialog-test-helpers.cjs').acceptNotices(win.webContents);
+      await js("window.__legacy=loadSavedSession('smoke@example.invalid'); true");
       check('Electron 31 synthetic localStorage profile survives runtime upgrade', await js("window.__legacy?.studentName==='Synthetic Learner' && window.__legacy.quizCompleted && window.__legacy.debriefingCompleted"));
       await js('applySessionToState(window.__legacy); true');
       await js('window.appApi.saveCertificate(state)');

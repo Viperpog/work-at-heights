@@ -9,64 +9,44 @@
 </head>
 <body>
   <section id="welcomePage" class="welcomePage">
+    <header class="welcomeBrand"><strong>WORKATHEIGHTS</strong><span>WORKING AT HEIGHTS · NR-35</span></header>
     <div class="welcomeShell">
       <div class="welcomeCard">
         <div class="welcomeHero">
           <div class="welcomeHeroContent">
-            <div class="welcomeLogoRow">
-              <img src="assets/logo.png" alt="Program logo" />
-            </div>
-            <h1>Working at Height</h1>
-            <p class="welcomeSubtitle">Multimodal Training Experience</p>
+            <p class="eyebrow">Multimodal safety training</p>
+            <h1>Working at<br />Heights</h1>
+            <p class="welcomeSubtitle">Training Experience</p>
+            <p class="welcomeLead">A structured journey from essential knowledge to safer decisions, immersive practice, and guided reflection.</p>
             <span class="welcomeAccentLine" aria-hidden="true"></span>
-            <p class="welcomeLead">A step-by-step journey to build your knowledge, demonstrate your skills, and earn your certification.</p>
+          </div>
+          <div class="welcomePoster">
+            <img src="assets/design-v2/welcome-training.png" alt="Worker at height on an industrial training structure" />
+            <div class="posterCopy"><p class="eyebrow">01 / 07</p><h2>TRAIN FOR<br />WHAT MATTERS.</h2><p>Your next decision can make the difference.</p><span>SIMULATION + REFLECTION</span></div>
           </div>
         </div>
 
         <div class="welcomeHighlights">
           <div class="welcomeFeature">
             <div>
-              <strong>Learn</strong>
-              <span>Watch the modules, review the ebook, and ask questions in SmartChats.</span>
+              <p class="eyebrow">Learn</p><strong>Discover the essentials</strong>
+              <span>Modules, ebook and SmartChats</span>
             </div>
             <span class="featureArrow" aria-hidden="true">→</span>
           </div>
           <div class="welcomeFeature">
             <div>
-              <strong>Demonstrate</strong>
-              <span>Complete an adaptive interview and quiz that adapts to your knowledge.</span>
+              <p class="eyebrow">Demonstrate</p><strong>Test your judgment</strong>
+              <span>Adaptive interview and quiz</span>
             </div>
             <span class="featureArrow" aria-hidden="true">→</span>
           </div>
           <div class="welcomeFeature">
             <div>
-              <strong>Reflect</strong>
-              <span>Upload your VR experience and receive AI-powered debriefing and feedback.</span>
+              <p class="eyebrow">Reflect</p><strong>Connect practice to action</strong>
+              <span>VR report and guided debrief</span>
             </div>
             <span class="featureArrow" aria-hidden="true">→</span>
-          </div>
-        </div>
-
-        <div class="welcomeBenefits" aria-label="Training experience benefits">
-          <div>
-            <span class="benefitIcon">✓</span>
-            <strong>Structured Journey</strong>
-            <span>Guided steps that keep you on track.</span>
-          </div>
-          <div>
-            <span class="benefitIcon">•</span>
-            <strong>Track Progress</strong>
-            <span>See your progress and stay motivated.</span>
-          </div>
-          <div>
-            <span class="benefitIcon">★</span>
-            <strong>Earn Certificate</strong>
-            <span>Complete all steps to earn your certificate.</span>
-          </div>
-          <div>
-            <span class="benefitIcon">↻</span>
-            <strong>Your Data is Safe</strong>
-            <span>Your progress is saved automatically.</span>
           </div>
         </div>
 
@@ -81,12 +61,7 @@
   <div id="appShell" class="hidden">
     <header class="topbar">
       <div class="brandLockup">
-        <img src="assets/logo.png" alt="Program logo" />
-        <div>
-          <p class="eyebrow topbarBadge">NR-35</p>
-          <h1>Working at Height</h1>
-          <p class="heroSubtitle">Multimodal Training Experience</p>
-        </div>
+        <h1>WORKATHEIGHTS</h1><p>NR-35 / SAFETY LEARNING EXPERIENCE</p>
       </div>
       <button id="audioSettingsButton" class="secondary audioSettingsButton" type="button" aria-label="Audio settings" aria-haspopup="dialog" aria-controls="audioSettings">⚙︎</button>
     </header>
@@ -97,7 +72,17 @@
 
     <main class="layout">
       <aside class="status">
-        <div class="statusHeader">
+        <p class="railHeading">TRAINING TRACK</p>
+        <nav class="tabs" aria-label="Training experience steps">
+          <button data-tab="1" class="active"><span>1</span> Orientation</button>
+          <button data-tab="2" disabled><span>2</span> SmartChats Analysis</button>
+          <button data-tab="3" disabled><span>3</span> Adaptive Interview</button>
+          <button data-tab="4" disabled><span>4</span> Knowledge Quiz</button>
+          <button data-tab="5" disabled><span>5</span> VR Experience</button>
+          <button data-tab="6" disabled><span>6</span> Debriefing</button>
+          <button data-tab="7" disabled><span>7</span> Certificate</button>
+        </nav>
+<div class="railProgress"><p>YOUR PROGRESS</p><strong id="stageProgressText">1 / 7 stages</strong><progress id="stageProgress" max="7" value="1" aria-label="Current training stage"></progress></div><details class="learnerStatusDetails"><summary>Learner status and readiness</summary>        <div class="statusHeader">
           <span class="statusIcon">✓</span>
           <div>
             <h2>Learner Status</h2>
@@ -177,24 +162,19 @@
           <strong>Current Step</strong>
           <span id="statusProgress">Orientation</span>
         </div>
+</details>
       </aside>
 
       <section class="content">
-        <nav class="tabs" aria-label="Training experience steps">
-          <button data-tab="1" class="active"><span>1</span> Orientation</button>
-          <button data-tab="2" disabled><span>2</span> SmartChats</button>
-          <button data-tab="3" disabled><span>3</span> Interview</button>
-          <button data-tab="4" disabled><span>4</span> Quiz</button>
-          <button data-tab="5" disabled><span>5</span> VR Experience Analysis</button>
-          <button data-tab="6" disabled><span>6</span> Debriefing</button>
-          <button data-tab="7" disabled><span>7</span> Certificate</button>
-        </nav>
+
 
         <section id="tab1" class="tab active">
           <div class="pageTitle orientationTitle">
-            <p class="eyebrow">Step 1</p>
-            <h2>Orientation</h2>
-            <p>Set up your learner profile, complete SmartChats, and keep the safety ebook nearby if you want extra reference material.</p>
+            <img src="assets/design-v2/orientation-safety.png" alt="" class="orientationHeroImage" />
+            <p class="eyebrow">01 / Begin the experience</p>
+            <h2>Safety begins<br />with better decisions.</h2>
+            <p>A guided pathway through knowledge, conversation,<br />virtual practice and reflection.</p>
+            <span class="badge">NR-35 / WEATHER + SAFETY</span>
           </div>
 
           <div class="panel orientationCard">
@@ -202,8 +182,8 @@
               <div class="orientationSectionHeader">
                 <span class="orientationStepBadge">1</span>
                 <div>
-                  <h3>Learner Details</h3>
-                  <p>Your name appears on reports and your certificate.</p>
+                  <h3>Learning Details</h3>
+                  <p>Your name and email are used for your training records and SmartChats.</p>
                 </div>
               </div>
               <div class="orientationFields">
@@ -223,16 +203,16 @@
               </div>
               <div class="orientationActions">
                 <button id="openSmartChats" class="primary" disabled>Open SmartChats</button>
-                <button id="completeLearning" class="primary" disabled>I Completed the SmartChats Modules</button>
+                <button id="completeLearning" class="secondary" disabled>I Completed the SmartChats Modules</button>
               </div>
             </section>
 
             <section class="orientationSection referenceSection">
               <div class="orientationSectionHeader">
-                <span class="orientationStepBadge optionalBadge">Optional</span>
+                <span class="orientationStepBadge optionalBadge"><img src="assets/design-v2/book.svg" alt="" /></span>
                 <div>
-                  <h3>Reference Material</h3>
-                  <p>Download the Working at Height safety ebook if you'd like additional reference material.</p>
+                  <p class="eyebrow">Optional reference</p><h3>Working at Height Ebook</h3>
+                  <p>Safety reference material for extra reading.</p>
                 </div>
               </div>
               <button id="downloadEbook" class="secondary">Download Safety Ebook</button>
@@ -242,23 +222,23 @@
 
         <section id="tab2" class="tab">
           <div class="pageTitle analysisTitle">
-            <p class="eyebrow">Step 2</p>
-            <h2>SmartChats Analysis</h2>
-            <p>Import the SmartChats CSV to estimate readiness and prepare the adaptive interview.</p>
+            <p class="eyebrow">02 / Conversational learning</p>
+            <h2>Understand your learning patterns</h2>
+            <p>Import your SmartChats conversations to review patterns before the adaptive interview.</p>
           </div>
           <div class="panel uploadPanel analysisPanel">
             <div class="analysisHeader">
               <span class="analysisIcon" aria-hidden="true">CSV</span>
               <div>
-                <h3>Import SmartChats</h3>
+                <p class="eyebrow">Conversation import</p><h3>Bring your SmartChats activity into WAH</h3>
                 <p>Use the exported CSV for the email entered in Orientation.</p>
               </div>
             </div>
             <div class="analysisImport">
-              <input type="file" id="smartCsv" accept=".csv" />
+              <label class="filePicker"><span>Import CSV ↗</span><input type="file" id="smartCsv" accept=".csv" aria-label="Import SmartChats CSV" /></label>
             </div>
-            <div id="smartResults" class="panel muted resultPanel analysisResult">No CSV loaded.</div>
-            <div class="analysisActions">
+            </div><div class="smartMetrics" aria-label="SmartChats import summary"><div class="panel"><p class="eyebrow">Questions reviewed</p><strong id="smartCountDisplay">—</strong><p>Across imported dialogue</p></div><div class="panel"><p class="eyebrow">Pattern classification</p><strong id="smartLevelDisplay">Not imported</strong><p>Based on question content</p></div><div class="panel"><p class="eyebrow">Next stage</p><strong>Interview</strong><p>Adaptive questions</p></div></div><div class="smartAnalysisBody"><div id="smartResults" class="panel muted resultPanel analysisResult">No CSV loaded.</div>
+            <div class="analysisActions"><p id="smartContinueTitle" class="eyebrow">Import your conversations</p><p>Your imported activity will help set the starting difficulty.</p>
               <button id="completeSmart" class="primary" disabled>Continue to Interview</button>
             </div>
           </div>
@@ -266,13 +246,14 @@
 
         <section id="tab3" class="tab">
           <div class="pageTitle">
-            <p class="eyebrow">Step 3</p>
-            <h2>Interview</h2>
+            <p class="eyebrow">03 / Adaptive interview</p>
+            <h2>Competency and Training</h2>
             <p class="subtitle">Safety readiness conversation</p>
+            <div class="interviewProgressPanel"><span id="interviewDifficultyDisplay" class="badge">Basic</span><progress id="interviewStageProgress" max="8" value="1" aria-label="Current interview module"></progress></div>
           </div>
           <div id="interviewIntro" class="panel featurePanel">
-            <h3>Choose Your Instructor</h3>
-            <p>Your instructor will ask safety questions, adapt to your answers, and recommend ebook chapters when review is helpful.</p>
+            <h3>Choose your safety instructor</h3>
+            <p>Select the coaching personality and voice that will guide your adaptive interview.</p>
             <div id="instructorChoices" class="instructorChoices" aria-label="Choose a Senior Safety Instructor"></div>
             <p class="hint">Select a portrait to choose the interview style and voice.</p>
             <button id="startInterview" class="primary">Start Interview</button>
@@ -300,6 +281,7 @@
             </div>
             <div id="chatLog"></div>
             <div class="chatComposer">
+              <label class="eyebrow" for="answerBox">Your response</label>
               <textarea id="answerBox" placeholder="Type your answer or record a voice response..."></textarea>
               <div class="actions">
                 <button id="submitAnswer" class="primary">Submit Answer</button>
@@ -327,9 +309,9 @@
 
         <section id="tab4" class="tab">
           <div class="pageTitle">
-            <p class="eyebrow">Step 4</p>
-            <h2>Quiz</h2>
-            <p class="subtitle">Adaptive readiness check</p>
+            <p class="eyebrow">04 / Knowledge check</p>
+            <h2>Safety decisions under pressure</h2>
+            <p class="subtitle">Select the best answer. Questions adapt to your demonstrated understanding.</p>
           </div>
           <div id="quizIntro" class="panel featurePanel">
             <h3>Confirm Readiness</h3>
@@ -343,13 +325,13 @@
               <span id="quizDifficultyBadge" class="badge">Difficulty</span>
               <span id="quizProgressText" class="hint">Progress</span>
             </div>
-            <h3 id="quizQuestionText"></h3>
+            <progress id="quizStageProgress" max="8" value="1" aria-label="Current quiz module"></progress><div class="quizQuestionPanel"><p class="eyebrow">Which action is most appropriate?</p><h3 id="quizQuestionText"></h3>
             <div id="quizOptions" class="quizOptions"></div>
             <div class="actions">
               <button id="submitQuizAnswer" class="primary">Submit Answer</button>
-              <button id="nextQuizQuestion" class="success hidden">Continue</button>
+              <button id="nextQuizQuestion" class="success hidden">Next Question →</button>
             </div>
-            <div id="quizFeedback" class="panel muted resultPanel hidden"></div>
+            <div id="quizFeedback" class="panel muted resultPanel hidden" aria-live="polite"></div></div>
           </div>
           <div id="quizComplete" class="panel successPanel hidden">
             <div class="successHeader">
@@ -369,11 +351,12 @@
 
         <section id="tab5" class="tab">
           <div class="pageTitle analysisTitle">
-            <p class="eyebrow">Step 5</p>
-            <h2>VR Experience Analysis</h2>
-            <p>Import the VR Experience Report to summarize the learner's VR activity and prepare the debriefing.</p>
+            <p class="eyebrow">05 / Immersive learning</p>
+            <h2>Reflect on your virtual experience</h2>
+            <p>Import the report from the separate VR experience to connect practice with your learning track.</p>
           </div>
-          <div class="panel uploadPanel analysisPanel">
+          <div class="vrJourney panel"><p class="eyebrow">Separate VR application → Word report → WAH analysis</p><ol><li><strong>Complete the VR experience</strong><span>Use the separately distributed VR training application.</span></li><li><strong>Export the VR report</strong><span>Save the .docx report generated by the VR system.</span></li><li><strong>Import it into WAH</strong><span>WAH reads and summarizes the report for your debriefing.</span></li></ol><p>This stage does not run the VR simulation. It reviews evidence from the virtual reality experience.</p></div>
+          <div class="vrAnalysisGrid"><div class="panel uploadPanel analysisPanel">
             <div class="analysisHeader">
               <span class="analysisIcon" aria-hidden="true">DOCX</span>
               <div>
@@ -388,20 +371,18 @@
             <div class="analysisActions">
               <button id="continueDebriefing" class="primary" disabled>Continue to Debriefing</button>
             </div>
-          </div>
+          </div><aside class="reflectionBridge panel"><p class="eyebrow">Reflection bridge</p><h3>From action to insight</h3><p>The next stage invites you to consider what felt realistic and what you learned.</p></aside></div>
         </section>
 
         <section id="tab6" class="tab">
           <div class="pageTitle">
-            <p class="eyebrow">Step 6</p>
-            <h2>Debriefing</h2>
-            <p class="subtitle">Guided reflection</p>
+            <p class="eyebrow">06 / Guided reflection</p>
+            <h2>Make sense of the experience</h2>
+            <p class="subtitle">Discuss your decisions and observations with your facilitator.</p>
           </div>
           <div id="debriefIntro" class="panel featurePanel">
-            <h3>Reflect on the Experience</h3>
-            <p>Your facilitator will use the imported VR report to guide a short debriefing.</p>
-            <h3>Choose Your Facilitator</h3>
-            <p class="hint">Choose the instructor style and voice for your debriefing.</p>
+            <h3>Choose your debriefing facilitator</h3>
+            <p>Select the instructor and voice that will guide your VR experience reflection.</p>
             <div id="debriefInstructorChoices" class="instructorChoices" aria-label="Choose a Debriefing Facilitator"></div>
             <div class="actions">
               <button id="startDebrief" class="success" disabled>Start Debriefing</button>
@@ -430,7 +411,8 @@
             </div>
             <div id="debriefLog"></div>
             <div class="chatComposer">
-              <textarea id="debriefAnswerBox" placeholder="Type your reflection or record a voice response..."></textarea>
+              <label class="eyebrow" for="debriefAnswerBox">Your reflection</label>
+              <textarea id="debriefAnswerBox" placeholder="Describe what you noticed and what you would do differently..."></textarea>
               <div class="actions">
                 <button id="submitDebriefAnswer" class="primary">Submit Reflection</button>
                 <button id="debriefVoiceAnswer" class="secondary micButton" type="button" aria-label="Record voice reflection" title="Record voice reflection"><span aria-hidden="true" class="micIcon">🎙️</span><span class="srOnly">Record voice reflection</span></button>
@@ -456,42 +438,25 @@
 
         <section id="tab7" class="tab">
           <div class="pageTitle">
-            <p class="eyebrow">Step 7</p>
-            <h2>Certificate</h2>
+            <p class="eyebrow">07 / Completion record</p>
+            <h2>Your certificate</h2>
             <p>Review your certificate and download a copy for your records.</p>
           </div>
-          <div class="certificateHero">
-            <span class="successMark certificateHeroMark" aria-hidden="true">✓</span>
-            <div>
-              <p class="successLabel">Training experience complete</p>
-              <h3>Certificate Ready</h3>
-              <p>Your completion record is ready to download.</p>
-            </div>
-          </div>
-          <div class="certificateFrame" aria-label="Certificate preview">
+<div class="certificateFrame" aria-label="Certificate preview">
             <div class="certificateInner">
               <p class="certSmall">Certificate of Completion</p>
-              <h3>Working at Height Training Experience</h3>
+              <h3>Working at Height Learning Track</h3>
               <p class="certSub">NR-35 Weather and Safety Focus</p>
               <div class="certDivider"></div>
               <p class="certStatement">This certifies that</p>
               <p id="certStudentName" class="certName">Learner Name</p>
               <p class="certStatement">has completed the required training experience activities: SmartChats, adaptive interview, adaptive quiz, VR experience review, and guided debriefing.</p>
-              <div class="certDetails">
-                <p><strong>Email</strong><span id="certEmail">Not available</span></p>
-                <p><strong>Completion Date</strong><span id="certDate">Not available</span></p>
-                <p><strong>SmartChats Level</strong><span id="certSmart">Not available</span></p>
-                <p><strong>Interview Level</strong><span id="certInterview">Not available</span></p>
-                <p><strong>Quiz Level</strong><span id="certQuiz">Not available</span></p>
-                <p><strong>VR Expertise Level</strong><span id="certVR">Not available</span></p>
-                <p class="overallRow"><strong>Overall Readiness</strong><span id="certOverallLevel">Not available</span></p>
-              </div>
-              <div class="certificateReadinessBlock">
+<div class="certificateReadinessBlock">
                 <p>Overall Readiness Classification</p>
                 <div id="certOverallBadge" class="readinessBadge basic">Basic</div>
-                <p id="certificateReadinessMessage">Additional study and practice may be recommended based on your overall readiness classification.</p>
+
               </div>
-              <div class="certFooter">
+              <p class="certActivities">SmartChats · Interview · Quiz · VR · Debriefing</p><div class="certFooter">
                 <div><span></span><p>Program Facilitator</p></div>
                 <div class="certificateSeal">✓</div>
                 <div><span></span><p>Training Experience Record</p></div>
@@ -508,12 +473,38 @@
               <button id="retakeProgram" class="secondary hidden">Retake Program</button>
             </div>
           </div>
+          <details class="certificateRecord"><summary>Completion details and readiness</summary>              <details class="certificateDetails"><summary>View assessment details</summary><div class="certDetails">
+                <p><strong>Email</strong><span id="certEmail">Not available</span></p>
+                <p><strong>Completion Date</strong><span id="certDate">Not available</span></p>
+                <p><strong>SmartChats Level</strong><span id="certSmart">Not available</span></p>
+                <p><strong>Interview Level</strong><span id="certInterview">Not available</span></p>
+                <p><strong>Quiz Level</strong><span id="certQuiz">Not available</span></p>
+                <p><strong>VR Expertise Level</strong><span id="certVR">Not available</span></p>
+                <p class="overallRow"><strong>Overall Readiness</strong><span id="certOverallLevel">Not available</span></p>
+              </div>
+              </details>                <p id="certificateReadinessMessage">Additional study and practice may be recommended based on your overall readiness classification.</p><div class="certificateHero">
+            <span class="successMark certificateHeroMark" aria-hidden="true">✓</span>
+            <div>
+              <p class="successLabel">Training experience complete</p>
+              <h3>Certificate Ready</h3>
+              <p>Your completion record is ready to download.</p>
+            </div>
+          </div>
+          </details>
         </section>
       </section>
     </main>
   </div>
 
   <script src="../node_modules/papaparse/papaparse.min.js"></script>
+  <dialog id="wahDialog" class="wahDialog" aria-labelledby="wahDialogTitle" aria-describedby="wahDialogBody wahDialogDetails">
+    <div class="wahDialogBrand"><span id="wahDialogIcon" aria-hidden="true"></span><p id="wahDialogEyebrow"></p></div>
+    <h2 id="wahDialogTitle"></h2>
+    <p id="wahDialogBody"></p>
+    <div id="wahDialogDetails" hidden><p id="wahDialogDetailLabel"></p><p id="wahDialogDetail"></p></div>
+    <div class="wahDialogActions"><button id="wahDialogPrimary" class="primary" type="button">OK</button><button id="wahDialogSecondary" class="secondary" type="button" hidden></button></div>
+  </dialog>
+  <script src="dialogs.js"></script>
   <script src="renderer.js"></script>
 
   <div id="instructorModal" class="modalOverlay hidden" role="dialog" aria-modal="true" aria-labelledby="instructorModalTitle">

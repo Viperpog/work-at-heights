@@ -20,7 +20,8 @@ app.whenReady().then(async()=>{
  const check=(name,value)=>{assert.ok(value,name);console.log(`PASS feedback ${++passed}: ${name}`);};
  try{
  await wait("typeof withInterviewFeedback==='function' && questionBank.length===240");
- await js(`window.alert=()=>{};window.Audio=class{constructor(){this.currentTime=0;this.duration=1;}async play(){this.onplay?.();queueMicrotask(()=>this.onended?.());}pause(){}};true`);
+ await require('./dialog-test-helpers.cjs').acceptNotices(win.webContents);
+ await js(`window.Audio=class{constructor(){this.currentTime=0;this.duration=1;}async play(){this.onplay?.();queueMicrotask(()=>this.onended?.());}pause(){}};true`);
  for(const scenario of [
   {name:'skip',mode:'incorrect',module:1,level:'expert',answer:'',skip:true,nextModule:2,nextLevel:'basic'},
   {name:'incorrect',mode:'incorrect',module:5,level:'expert',answer:'Unrelated synthetic answer',nextModule:6,nextLevel:'basic'},
