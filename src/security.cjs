@@ -27,7 +27,10 @@ function resourceAllowed(url, type, appPath) {
   const relative = {
     mainFrame: ['src/index.html'], script: ['src/renderer.js', 'node_modules/papaparse/papaparse.min.js'],
     stylesheet: ['src/styles.css'],
-    image: ['src/assets/logo.png', 'src/assets/wah-hero.png', ...['jake-miller', 'emily-carter', 'carlos-rivera', 'beatrice-johnson'].map(name => 'src/assets/instructors/' + name + '.png')]
+    font: ['src/assets/design-v2/Inter.ttf'],
+    image: ['src/assets/logo.png', 'src/assets/wah-hero.png',
+      ...['welcome-training.png', 'orientation-safety.png', 'gear.svg', 'book.svg', 'voice.svg', 'mute.svg', 'microphone.svg'].map(name => 'src/assets/design-v2/' + name),
+      ...['jake-miller', 'emily-carter', 'carlos-rivera', 'beatrice-johnson'].map(name => 'src/assets/instructors/' + name + '.png')]
   }[type] || [];
   return relative.some(file => pathToFileURL(path.join(appPath, file)).href === url);
 }

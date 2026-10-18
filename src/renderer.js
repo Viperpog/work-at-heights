@@ -223,8 +223,14 @@ function textParagraph(root, label, value) {
   paragraph.appendChild(document.createTextNode(String(value ?? '')));
   root.appendChild(paragraph);
 }
+function updateSmartMetrics() {
+  if ($('smartCountDisplay')) $('smartCountDisplay').textContent = state.smartchatsCompleted ? String(state.smartQuestionCount) : '—';
+  if ($('smartLevelDisplay')) $('smartLevelDisplay').textContent = state.smartchatsCompleted ? state.expertiseAfterSmartChats : 'Not imported';
+  if ($('smartContinueTitle')) $('smartContinueTitle').textContent = state.smartchatsCompleted ? 'Ready to continue' : 'Import your conversations';
+}
 function renderSmartResults() {
   const root = $('smartResults');
+  updateSmartMetrics();
   root.replaceChildren();
   if (!state.smartchatsCompleted) { root.textContent = 'No CSV loaded.'; return; }
   const badge = textNode('p', '');
@@ -1400,7 +1406,16 @@ function setProgressTrackerStep(step, status, detail = '') {
   }
 }
 
+function updateInterviewProgress() {
+  if ($('interviewStageProgress')) $('interviewStageProgress').value = Math.min(8, state.interview.currentModule);
+  if ($('interviewDifficultyDisplay')) $('interviewDifficultyDisplay').textContent = levelLabels[state.interview.currentLevel] || 'Basic';
+}
 function updateStatus() {
+  updateSmartMetrics();
+  // Presentation of the current stage, not an invented completion percentage.
+  if ($('stageProgressText')) $('stageProgressText').textContent = `${state.currentTab} / 7 stages`;
+  if ($('stageProgress')) $('stageProgress').value = state.currentTab;
+  updateInterviewProgress();
   $('statusName').textContent = state.studentName || 'Not started';
   $('statusEmail').textContent = state.studentEmail || 'Not started';
   const stepLabels = { 1: 'Orientation', 2: 'SmartChats', 3: 'Interview', 4: 'Quiz', 5: 'VR Experience Analysis', 6: 'Debriefing', 7: 'Certificate' };
@@ -1771,6 +1786,7 @@ ${evaluation.improvementGuidanceText || ''}`;
     }
     const nq = chooseQuestion(next.module, next.level);
     state.interview.activeQuestion = nq;
+    updateInterviewProgress();
     saveSession();
     const segueText = makeSegue(evaluation, nq);
 
@@ -1817,6 +1833,7 @@ function chooseQuizQuestion(module, level) {
 
 function renderQuizQuestion() {
   const q = state.quiz.activeQuestion;
+  if ($('quizStageProgress')) $('quizStageProgress').value = q.module;
   $('quizModuleBadge').textContent = `Module ${q.module}: ${q.moduleTitle}`;
   $('quizDifficultyBadge').textContent = levelLabels[q.difficulty] || q.difficulty;
   $('quizProgressText').textContent = `Questions presented: ${state.quiz.history.length + 1}`;
@@ -1926,6 +1943,15 @@ function submitQuizAnswer() {
     textParagraph(feedback, 'Recommended review:', q.recommendedChapters.map(r => 'Module ' + r.module + ', Chapter ' + r.chapter + ': ' + r.topic).join('; '));
   }
   $('quizFeedback').classList.remove('hidden');
+  // Review decorations use exactly the selected index and bank's correct index.
+  document.querySelectorAll('#quizOptions .option').forEach((label, index) => {
+    const isCorrect = index === q.correctIndex;
+    const isSelected = index === selectedIndex;
+    label.classList.toggle('correctAnswer', isCorrect);
+    label.classList.toggle('incorrectAnswer', isSelected && !correct);
+    if (isCorrect || isSelected) label.appendChild(textNode('span',
+      isCorrect ? (isSelected ? 'Your answer · Correct answer' : 'Correct answer') : 'Your answer', 'answerStatus'));
+  });
   document.querySelectorAll('input[data-quiz-option="true"]').forEach(input => input.disabled = true);
   $('submitQuizAnswer').classList.add('hidden');
   $('nextQuizQuestion').classList.remove('hidden');
@@ -2160,11 +2186,18 @@ async function init() {
   $('completeLearning').addEventListener('click', () => { state.orientationCompleted = true; unlock(2); setTab(2); saveSession(); });
   $('smartCsv').addEventListener('change', e => {
     const file = e.target.files[0]; if (!file) return;
+    $('smartResults').textContent = 'Importing SmartChats CSV...';
+    $('smartResults').setAttribute('aria-busy', 'true');
     Papa.parse(file, { header: true, skipEmptyLines: true, complete: res => {
       const result = classifySmartChats(res.data);
       state.smartQuestionCount = result.count; state.expertiseAfterSmartChats = result.level; state.smartSummary = result.summary; state.smartchatsCompleted = true;
       renderSmartResults();
+      $('smartResults').removeAttribute('aria-busy');
+      if (res.errors.length) textParagraph($('smartResults'), 'Import notice:', 'The CSV contains formatting warnings. Check the source file if the results are unexpected.');
       $('completeSmart').disabled = false; updateStatus(); saveSession();
+    }, error: () => {
+      $('smartResults').removeAttribute('aria-busy');
+      $('smartResults').textContent = 'Unable to read this CSV. Choose a readable CSV exported from SmartChats and try again.';
     }});
   });
   $('completeSmart').addEventListener('click', () => { unlock(3); setTab(3); saveSession(); });
@@ -2190,6 +2223,7 @@ async function init() {
     updateInstructorHeader();
     state.interview.currentModule = 1; state.interview.currentLevel = initialLevelFromSmartChats();
     const q = chooseQuestion(1, state.interview.currentLevel); state.interview.activeQuestion = q;
+    updateInterviewProgress();
     addMsg('interviewer', `${personaOpening()}
 
 Welcome to the Interview stage of the Working at Height training experience. I will guide you through questions about work-at-height safety, hazard recognition, weather-related decisions, and practical judgment. If you are unsure, you may select I Don't Know and continue.
