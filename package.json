@@ -37,6 +37,7 @@
       "docs/**/*",
       "!docs/design-v2/screenshots/**/*",
       "!docs/debriefing-pdf/**/*",
+      "!docs/final-welcome/**/*",
       "package.json"
     ],
     "win": {
