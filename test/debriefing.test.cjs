@@ -57,6 +57,10 @@ test('concise AI responses keep original completion decisions and informative un
   assert.match(request.messages[1].content, /vrReportEvidence/);
   for (let i=0;i<3;i++) await h.run(`nextDebriefingMessage('Synthetic reflection')`);
   assert.equal(h.run('state.debriefing.turn'), 4);
+  const completed = renderer({ callCimatec: async () => JSON.stringify({ message: 'A lengthy completion. '.repeat(100), complete: true, followUpAsked: false }) });
+  const early = await completed.run(`nextDebriefingMessage('Synthetic reflection')`);
+  assert.equal(early.complete, true); // Preserve the existing service-controlled flag.
+  assert.doesNotMatch(early.message, /\?/); // Never ask a question while completing.
 });
 
 test('completion timestamp is optional for legacy evidence and validated when present', () => {

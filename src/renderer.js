@@ -2162,7 +2162,7 @@ async function nextDebriefingMessage(userAnswer) {
     if (words(parsed.message).length > 60 || /<[^>]+>|ignore previous|system prompt/i.test(parsed.message)
       || (parsed.message.match(/\?/g) || []).length > (isFinalTurn ? 0 : 1)
       || (String(state.debriefing.vrSummary || '').length > 100 && parsed.message.includes(state.debriefing.vrSummary))) {
-      parsed.message = conciseDebriefFallback(userAnswer, isFinalTurn);
+      parsed.message = conciseDebriefFallback(userAnswer, isFinalTurn || parsed.complete);
     }
     if (isFinalTurn) {
       parsed.complete = true;
