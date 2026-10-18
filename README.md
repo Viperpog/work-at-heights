@@ -22,7 +22,7 @@ The project was developed as a research platform while remaining modular enough 
 - Immersive VR training
 - AI-assisted reflective debriefing
 - Automatic Microsoft Word report generation
-- Certificate generation
+- Local PDF certificate generation (other reports remain Microsoft Word)
 - Voice interaction (Speech-to-Text and Text-to-Speech)
 - Resume interrupted sessions
 - Modular, loosely coupled architecture

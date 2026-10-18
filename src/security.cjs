@@ -25,8 +25,8 @@ function trustedSender(event, windows, documentURL) {
 function resourceAllowed(url, type, appPath) {
   if (type === 'media' && url.startsWith('blob:')) return true;
   const relative = {
-    mainFrame: ['src/index.html'], script: ['src/renderer.js', 'src/dialogs.js', 'node_modules/papaparse/papaparse.min.js'],
-    stylesheet: ['src/styles.css'],
+    mainFrame: ['src/index.html'], script: ['src/renderer.js', 'src/dialogs.js', 'src/certificate.js', 'node_modules/papaparse/papaparse.min.js'],
+    stylesheet: ['src/styles.css', 'src/certificate.css'],
     font: ['src/assets/design-v2/Inter.ttf'],
     image: ['src/assets/logo.png', 'src/assets/wah-hero.png',
       ...['welcome-training.png', 'orientation-safety.png', 'gear.svg', 'book.svg', 'voice.svg', 'mute.svg', 'microphone.svg'].map(name => 'src/assets/design-v2/' + name),
@@ -53,8 +53,9 @@ function inside(file, directory) {
   return relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative));
 }
 
-function savePath(value, appPath) {
-  if (!text(value, 4096) || !path.isAbsolute(value) || path.extname(value).toLowerCase() !== '.docx' || /[\u0000-\u001F]/.test(value)) reject('Choose a Word document destination.');
+function savePath(value, appPath, extension = '.docx') {
+  if (!['.docx', '.pdf'].includes(extension)) reject('Unsupported document format.');
+  if (!text(value, 4096) || !path.isAbsolute(value) || path.extname(value).toLowerCase() !== extension || /[\u0000-\u001F]/.test(value)) reject(extension === '.pdf' ? 'Choose a PDF destination.' : 'Choose a Word document destination.');
   const target = path.resolve(value);
   const parent = fs.realpathSync(path.dirname(target));
   if (inside(target, appPath) || inside(path.join(parent, path.basename(target)), fs.realpathSync(appPath))) reject('Cannot overwrite application files.');
@@ -136,6 +137,9 @@ function normalizeState(input) {
   }
   for (const key of ['interview', 'quiz']) if (state[key].history.length > 24 || (state[key].recommendations !== undefined && (!Array.isArray(state[key].recommendations) || state[key].recommendations.some(r => !object(r) || !Number.isInteger(r.module) || !text(r.chapter) || !text(r.topic))))) reject();
   if (state.debriefing.history.length > 50 || state.debriefing.history.some(h => !object(h) || !['user', 'interviewer'].includes(h.role) || !text(h.text))) reject();
+  if (state.debriefing.completedAt !== undefined && (!text(state.debriefing.completedAt, 40)
+    || !/^\d{4}-\d{2}-\d{2}T/.test(state.debriefing.completedAt)
+    || !Number.isFinite(Date.parse(state.debriefing.completedAt)))) reject('Invalid completion date.');
   return state;
 }
 

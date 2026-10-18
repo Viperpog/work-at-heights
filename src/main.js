@@ -308,46 +308,15 @@ function readinessMessage(level) {
 
 handle('save-certificate', async (_, input) => {
   const state = security.validateEvidence(input, interviewBank, quizBank, true);
-  const completed = state.debriefingCompleted ? 'Yes' : 'No';
-  const overallReadiness = calculateOverallReadiness(state);
-  const details = [
-    ['Name', state.studentName],
-    ['Email', state.studentEmail],
-    ['Completion Date', new Date().toLocaleDateString()],
-    ['SmartChats Level', state.expertiseAfterSmartChats || 'Not available'],
-    ['Interview Level', state.expertiseAfterInterview || 'Not available'],
-    ['Quiz Level', state.expertiseAfterQuiz || 'Not available'],
-    ['VR Expertise Level', state.vrExpertiseLevel || 'Not identified'],
-    ['Overall Readiness Classification', overallReadiness],
-    ['Debriefing Completed', completed]
-  ];
-
-  const border = { style: BorderStyle.DOUBLE, size: 12, color: '9F7B30' };
-  const frame = new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: { top: border, bottom: border, left: border, right: border, insideHorizontal: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }, insideVertical: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' } },
-    rows: [new TableRow({ children: [new TableCell({
-      margins: { top: 700, bottom: 700, left: 700, right: 700 },
-      children: [
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 180 }, children: [new TextRun({ text: 'CERTIFICATE OF COMPLETION', bold: true, size: 28 })] }),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 120 }, children: [new TextRun({ text: 'Working at Height Learning Track', bold: true, size: 42, font: 'Georgia' })] }),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 360 }, children: [new TextRun({ text: 'NR-35 Weather and Safety Focus', italics: true, size: 22 })] }),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 120 }, children: [new TextRun({ text: 'This certifies that', size: 22 })] }),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 180 }, children: [new TextRun({ text: String(state.studentName || 'Learner Name'), bold: true, size: 40, font: 'Georgia' })] }),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 220 }, children: [new TextRun({ text: 'has successfully completed the required program activities, including SmartChats learning review, safety knowledge interview, readiness quiz, VR experience report review, and program feedback.', size: 21 })] }),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 90 }, children: [new TextRun({ text: 'OVERALL READINESS CLASSIFICATION', bold: true, size: 18, color: '7A5A18' })] }),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 140 }, children: [new TextRun({ text: overallReadiness.toUpperCase(), bold: true, size: 30, color: overallReadiness === 'Expert' ? '05603A' : overallReadiness === 'Intermediate' ? '1849A9' : '93370D' })] }),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 260 }, children: [new TextRun({ text: readinessMessage(overallReadiness), size: 20 })] }),
-        summaryTable(details),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 360, after: 80 }, children: [new TextRun({ text: 'Congratulations on completing the program.', bold: true, size: 22 })] })
-      ]
-    })] })]
-  });
-
-  const doc = new Document({ sections: [{ children: [frame] }] });
-  return saveDocument({
-    title: 'Save Certificate',
-    defaultPath: `${safeName(state.studentName)}_working_at_height_certificate.docx`,
-    filters: [{ name: 'Word Document', extensions: ['docx'] }]
-  }, await Packer.toBuffer(doc));
+  const readiness = calculateOverallReadiness(state);
+  const result = await dialog.showSaveDialog({ title: 'Save PDF Certificate',
+    defaultPath: `${safeName(state.studentName)}_working_at_height_certificate.pdf`,
+    filters: [{ name: 'PDF Certificate', extensions: ['pdf'] }] });
+  if (result.canceled || !result.filePath) return { canceled: true };
+  const target = security.savePath(result.filePath, app.getAppPath(), '.pdf');
+  const data = { name: state.studentName, readiness, qualification: readinessMessage(readiness),
+    date: state.debriefing.completedAt ? new Date(state.debriefing.completedAt).toLocaleDateString() : 'Not recorded (legacy session)' };
+  const buffer = await require('./certificate-pdf.cjs').createCertificatePDF(data);
+  fs.writeFileSync(target, buffer);
+  return { canceled: false, filePath: target };
 });

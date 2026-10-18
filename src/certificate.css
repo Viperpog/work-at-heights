@@ -1,0 +1,32 @@
+@font-face { font-family:Inter; src:url('assets/design-v2/Inter.ttf') format('truetype'); font-weight:100 900; font-display:block; }
+.certificateInner { font-family:Inter,Arial,sans-serif; }
+.certificateInner { background:white; margin:auto; width:min(732px,100%); min-height:532px; border:3px solid var(--gold); outline:1px solid var(--gold); outline-offset:-14px; padding:36px 32px; text-align:center; box-shadow:9px 9px #d9e0e0; overflow-wrap:anywhere; }
+.certSmall { text-transform:uppercase; color:var(--gold); font-weight:700; font-size:13px; margin-bottom:12px; }
+.certificateInner h3 { color:var(--navy); font-size:26px; margin:0 0 16px; }
+.certSub { font-size:14px; color:var(--muted); }
+.certDivider { width:55%; height:1px; background:var(--gold); margin:22px auto; }
+.certStatement { font-size:13px; max-width:540px; margin:16px auto 0; }
+.certName { font-size:28px; font-weight:700; margin:2px 0 20px; color:var(--navy); }
+.certificateReadinessBlock { margin-top:24px; }
+.certificateReadinessBlock p:first-child { color:var(--gold); font-size:12px; font-weight:700; text-transform:uppercase; margin:0 0 8px; }
+.readinessBadge { color:var(--accent); font-size:23px; font-weight:700; text-transform:uppercase; }
+.certActivities { margin:20px 0 0; padding-top:20px; border-top:1px solid var(--line); font-size:11px; color:var(--muted); }
+.certFooter { display:flex; gap:16px; justify-content:space-evenly; margin-top:18px; color:var(--gold); font-size:10px; }
+.certFooter p { margin:0; }
+.certificateSeal { color:var(--accent); }
+
+.certQualification { font-size:10px; line-height:1.45; color:var(--muted); margin:12px auto 0; max-width:580px; }
+.certCompletionDate { font-size:11px; color:var(--muted); margin:12px 0 0; }
+.certRecord { font-size:10px; color:var(--muted); margin:16px 0 0; }
+.certificatePrint { margin:0; font-family:Inter,Arial,sans-serif; --gold:#9f7b30; --navy:#101f31; --muted:#72808f; --line:#e2e7e8; --accent:#167f82; }
+.certificatePrint .certificateInner { box-sizing:border-box; width:277mm; height:188mm; min-height:0; margin:10mm; padding:12mm 14mm; box-shadow:none; display:flex; flex-direction:column; justify-content:center; }
+.certificatePrint .certName { font-size:28px; line-height:1.15; margin-bottom:14px; }
+.certificatePrint .certSmall { margin-top:0; }
+.certificatePrint .certActivities { margin-top:16px; padding-top:16px; }
+@page { size:A4 landscape; margin:0; }
+@media print { html,body { width:297mm; print-color-adjust:exact; -webkit-print-color-adjust:exact; } }
+
+.certificateInner.longName .certName { font-size:20px; line-height:1.2; }
+/* Inter contextual punctuation aliases become private-use Unicode in Skia PDF
+   text extraction. Keep the original font with standard searchable glyphs. */
+.certificateInner { font-variant-ligatures:none; font-feature-settings:"calt" 0, "liga" 0; }

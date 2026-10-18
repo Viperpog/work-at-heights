@@ -211,14 +211,14 @@ test('preload API routes each exposed operation to a registered main handler', (
   for (const [channel] of calls) assert.ok(main.handlers.has(channel), channel);
 });
 
-test('real document libraries export reports/certificate and import VR text with mocked native dialogs', async () => {
+test('real DOCX libraries export unchanged reports and import VR text; canceled PDF save remains canceled', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wah-test-'));
   try {
     const h = renderer();
     h.run("state.studentName = 'Synthetic Learner'; state.studentEmail = 'learner@example.invalid'");
     const state = completedState();
     const main = mainProcess();
-    for (const channel of ['save-interview-report', 'save-quiz-report', 'save-debriefing-report', 'save-certificate', 'save-ebook']) {
+    for (const channel of ['save-interview-report', 'save-quiz-report', 'save-debriefing-report', 'save-ebook']) {
       const filePath = path.join(dir, `${channel}.docx`);
       main.dialog.showSaveDialog = async () => ({ canceled: false, filePath });
       await main.handlers.get(channel)(... (channel === 'save-ebook' ? [] : [null, state]));
@@ -226,7 +226,7 @@ test('real document libraries export reports/certificate and import VR text with
       assert.ok(extracted.value.length > 0, channel);
       if (channel !== 'save-ebook') assert.match(extracted.value, /Synthetic Learner/);
     }
-    main.dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path.join(dir, 'save-certificate.docx')] });
+    main.dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path.join(dir, 'save-debriefing-report.docx')] });
     assert.match((await main.handlers.get('select-vr-report')()).text, /Synthetic Learner/);
     const invalid = path.join(dir, 'invalid.docx');
     fs.writeFileSync(invalid, 'not a Word document');

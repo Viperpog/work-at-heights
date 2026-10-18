@@ -5,6 +5,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self' blob:; font-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; base-uri 'none'; form-action 'none'" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Working at Height Training Experience</title>
+  <link rel="stylesheet" href="certificate.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -443,33 +444,15 @@
             <p>Review your certificate and download a copy for your records.</p>
           </div>
 <div class="certificateFrame" aria-label="Certificate preview">
-            <div class="certificateInner">
-              <p class="certSmall">Certificate of Completion</p>
-              <h3>Working at Height Learning Track</h3>
-              <p class="certSub">NR-35 Weather and Safety Focus</p>
-              <div class="certDivider"></div>
-              <p class="certStatement">This certifies that</p>
-              <p id="certStudentName" class="certName">Learner Name</p>
-              <p class="certStatement">has completed the required training experience activities: SmartChats, adaptive interview, adaptive quiz, VR experience review, and guided debriefing.</p>
-<div class="certificateReadinessBlock">
-                <p>Overall Readiness Classification</p>
-                <div id="certOverallBadge" class="readinessBadge basic">Basic</div>
-
-              </div>
-              <p class="certActivities">SmartChats · Interview · Quiz · VR · Debriefing</p><div class="certFooter">
-                <div><span></span><p>Program Facilitator</p></div>
-                <div class="certificateSeal">✓</div>
-                <div><span></span><p>Training Experience Record</p></div>
-              </div>
-            </div>
+            <div class="certificateInner"></div>
           </div>
           <div class="certificateActionPanel">
             <div>
               <h3>Save Your Certificate</h3>
-              <p>Download a copy for your records.</p>
+              <p>Download a PDF copy for your records.</p>
             </div>
             <div class="actions certificateActions">
-              <button id="downloadCertificate" class="primary">Download Certificate</button>
+              <button id="downloadCertificate" class="primary">Download PDF Certificate</button>
               <button id="retakeProgram" class="secondary hidden">Retake Program</button>
             </div>
           </div>
@@ -504,7 +487,8 @@
     <div id="wahDialogDetails" hidden><p id="wahDialogDetailLabel"></p><p id="wahDialogDetail"></p></div>
     <div class="wahDialogActions"><button id="wahDialogPrimary" class="primary" type="button">OK</button><button id="wahDialogSecondary" class="secondary" type="button" hidden></button></div>
   </dialog>
-  <script src="dialogs.js"></script>
+  <script src="certificate.js"></script>
+<script src="dialogs.js"></script>
   <script src="renderer.js"></script>
 
   <div id="instructorModal" class="modalOverlay hidden" role="dialog" aria-modal="true" aria-labelledby="instructorModalTitle">
