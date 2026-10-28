@@ -207,7 +207,7 @@ test('preload API routes each exposed operation to a registered main handler', (
       ipcRenderer: { invoke: (...args) => calls.push(args) } })
   });
   for (const fn of Object.values(api)) fn({ synthetic: true });
-  assert.equal(calls.length, 11);
+  assert.equal(calls.length, 13);
   for (const [channel] of calls) assert.ok(main.handlers.has(channel), channel);
 });
 

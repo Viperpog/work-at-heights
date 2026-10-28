@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { inflateRawSync } = require('node:zlib');
+const vrContract = require('./vr-contract.cjs');
 
 function reject(message = 'Invalid document evidence.') { throw new Error(message); }
 function object(value) { return value && typeof value === 'object' && !Array.isArray(value); }
@@ -54,8 +55,8 @@ function inside(file, directory) {
 }
 
 function savePath(value, appPath, extension = '.docx') {
-  if (!['.docx', '.pdf'].includes(extension)) reject('Unsupported document format.');
-  if (!text(value, 4096) || !path.isAbsolute(value) || path.extname(value).toLowerCase() !== extension || /[\u0000-\u001F]/.test(value)) reject(extension === '.pdf' ? 'Choose a PDF destination.' : 'Choose a Word document destination.');
+  if (!['.docx', '.pdf', '.json'].includes(extension)) reject('Unsupported document format.');
+  if (!text(value, 4096) || !path.isAbsolute(value) || path.extname(value).toLowerCase() !== extension || /[\u0000-\u001F]/.test(value)) reject(extension === '.pdf' ? 'Choose a PDF destination.' : extension === '.json' ? 'Choose a JSON destination.' : 'Choose a Word document destination.');
   const target = path.resolve(value);
   const parent = fs.realpathSync(path.dirname(target));
   if (inside(target, appPath) || inside(path.join(parent, path.basename(target)), fs.realpathSync(appPath))) reject('Cannot overwrite application files.');
@@ -106,6 +107,28 @@ async function readReport(filePath, extract) {
   if (!text(extracted.value, 500000)) reject('Word report text exceeds supported limits.');
   // Empty valid DOCX remains allowed: changing this would alter current completion rules.
   return { canceled: false, fileName: path.basename(filePath), text: xmlText(extracted.value) };
+}
+
+// What the renderer may tell the main process about the learner's session: the plan WAH issued and the VR sessions already imported.
+function vrImportContext(value) {
+  if (value === undefined) return {};
+  if (!object(value) || Object.keys(value).some(key => !['planId', 'seenSessionIds'].includes(key))) reject('Invalid IPC arguments.');
+  const { planId = null, seenSessionIds = [] } = value;
+  if ((planId !== null && !text(planId, 36)) || !Array.isArray(seenSessionIds) || seenSessionIds.length > 1000 || seenSessionIds.some(id => !text(id, 32))) reject('Invalid IPC arguments.');
+  return { planId, seenSessionIds };
+}
+
+// VR report as JSON (safeheight.vr_event_log): size, schema, plan and duplicate checks happen here, never in the renderer.
+// Content problems come back as { rejected } so the learner sees the reason; unreadable files throw like the Word path.
+function readVrJson(filePath, context = {}) {
+  if (!text(filePath, 4096) || !path.isAbsolute(filePath) || path.extname(filePath).toLowerCase() !== '.json') reject('Select a JSON report.');
+  const stat = fs.lstatSync(filePath);
+  if (!stat.isFile() || stat.size > vrContract.MAX_MESSAGE_BYTES) reject('Invalid or oversized JSON report.');
+  const verdict = vrContract.acceptVrReport(fs.readFileSync(filePath), context);
+  if (!verdict.accepted) return { canceled: false, rejected: true, code: verdict.code, message: verdict.message };
+  const { log, bound, rating } = verdict;
+  return { canceled: false, kind: 'json', fileName: path.basename(filePath), sessionId: log.session_id.toLowerCase(), bound,
+    level: rating.level, rule: rating.rule, code: rating.code, reason: rating.reason, text: vrContract.reportDigest(log) };
 }
 
 function normalizeState(input) {
@@ -188,4 +211,4 @@ function validateEvidence(input, interviewBank, quizBank, certificate = false) {
   return state;
 }
 
-module.exports = { trustedSender, resourceAllowed, externalURL, savePath, validateZip, readReport, validateEvidence, xmlText, pathToFileURL };
+module.exports = { trustedSender, resourceAllowed, externalURL, savePath, validateZip, readReport, readVrJson, vrImportContext, validateEvidence, xmlText, pathToFileURL };

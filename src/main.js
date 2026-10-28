@@ -8,6 +8,7 @@ const { loadServiceConfig, createServiceClient } = require('./services.cjs');
 const serviceConfig = loadServiceConfig(app.getAppPath());
 const services = createServiceClient(serviceConfig, { fetchImpl: (...args) => fetch(...args) });
 const security = require('./security.cjs');
+const vrContract = require('./vr-contract.cjs');
 const documentURL = security.pathToFileURL(path.join(__dirname, 'index.html')).href;
 const trustedWindows = new Set();
 const interviewBank = JSON.parse(fs.readFileSync(path.join(app.getAppPath(), 'data/question-bank.json'), 'utf8'));
@@ -16,7 +17,8 @@ const quizBank = JSON.parse(fs.readFileSync(path.join(app.getAppPath(), 'data/fi
 function handle(channel, handler) {
   ipcMain.handle(channel, async (event, ...args) => {
     if (!security.trustedSender(event, trustedWindows, documentURL)) throw new Error('Untrusted IPC sender.');
-    if (args.length !== (['save-ebook', 'select-vr-report'].includes(channel) ? 0 : 1)) throw new Error('Invalid IPC arguments.');
+    // select-vr-report takes an optional { planId, seenSessionIds } (validated by security.vrImportContext).
+    if (!(channel === 'save-ebook' ? [0] : channel === 'select-vr-report' ? [0, 1] : [1]).includes(args.length)) throw new Error('Invalid IPC arguments.');
     return handler(event, ...args);
   });
 }
@@ -94,15 +96,33 @@ handle('call-cimatec', async (_event, payload) => services.chat(payload));
 handle('transcribe-audio', async (_event, payload) => services.transcribe(payload));
 handle('synthesize-speech', async (_event, payload) => services.speech(payload));
 
-handle('select-vr-report', async () => {
+handle('select-vr-report', async (_, context) => {
+  const expected = security.vrImportContext(context);
   const result = await dialog.showOpenDialog({
     title: 'Select VR Experience Report',
     properties: ['openFile'],
-    filters: [{ name: 'Word Document', extensions: ['docx'] }]
+    filters: [{ name: 'VR report (.json or .docx)', extensions: ['json', 'docx'] }, { name: 'Word Document', extensions: ['docx'] }, { name: 'VR event log', extensions: ['json'] }]
   });
   if (result.canceled || !result.filePaths.length) return { canceled: true };
   const filePath = result.filePaths[0];
+  if (path.extname(filePath).toLowerCase() === '.json') return security.readVrJson(filePath, expected);
   return security.readReport(filePath, options => mammoth.extractRawText(options));
+});
+
+// Plan for the headset (wah.session_plan 1.0). The e-mail is turned into a pseudonym here and never leaves this process.
+handle('create-session-plan', async (_, input) => {
+  const o = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  if (Object.keys(o).some(key => !['email', 'smartChatsLevel', 'interviewLevel', 'quizLevel', 'quizScorePct', 'weakTopics', 'mode'].includes(key))) throw new Error('Invalid session plan input.');
+  return vrContract.buildSessionPlan({ ...o, mode: o.mode === undefined ? 'study' : o.mode });
+});
+
+handle('save-session-plan', async (_, plan) => {
+  vrContract.validateSessionPlan(plan);
+  const { canceled, filePath } = await dialog.showSaveDialog({ title: 'Save VR session plan', defaultPath: 'session_plan.json', filters: [{ name: 'Session plan', extensions: ['json'] }] });
+  if (canceled || !filePath) return { canceled: true };
+  const target = security.savePath(filePath, app.getAppPath(), '.json');
+  fs.writeFileSync(target, JSON.stringify(plan, null, 2) + '\n');
+  return { canceled: false, filePath: target };
 });
 
 function p(text, opts = {}) {
@@ -257,7 +277,7 @@ handle('save-debriefing-report', async (_, input) => {
     runPara('SmartChats Level', state.expertiseAfterSmartChats || 'Not available'),
     runPara('Interview Level', state.expertiseAfterInterview || 'Not completed'),
     runPara('Quiz Level', state.expertiseAfterQuiz || 'Not completed'),
-    runPara('VR Expertise Level', state.vrExpertiseLevel || 'Not identified'),
+    runPara('VR Expertise Level', normalizeReadinessLevel(state.vrExpertiseLevel) || 'Not rated'),
     runPara('VR Report File', d.vrReportFileName || 'Not available'),
     sectionPara('VR Report Summary'),
     p(d.vrSummary || 'No VR report summary generated.'),
@@ -282,21 +302,23 @@ function normalizeReadinessLevel(value) {
   return null;
 }
 
+// null = not rated (missing, "Not rated", or a VR session without a level): the item leaves the average instead of counting as Basic.
 function readinessPoints(value) {
   const level = normalizeReadinessLevel(value);
   if (level === 'Expert') return 3;
   if (level === 'Intermediate') return 2;
   if (level === 'Basic') return 1;
-  return 1;
+  return null;
 }
 
+// Average of the rated items; 2.75 and 1.75 equal the former cut-offs of 11 and 7 points out of four items.
+// Pending decision: a certificate is still issued when the VR is not rated (and, later, when vr_validity is inconclusive).
 function calculateOverallReadiness(state) {
-  const total = readinessPoints(state.expertiseAfterSmartChats)
-    + readinessPoints(state.expertiseAfterInterview)
-    + readinessPoints(state.expertiseAfterQuiz)
-    + readinessPoints(state.vrExpertiseLevel);
-  if (total >= 11) return 'Expert';
-  if (total >= 7) return 'Intermediate';
+  const points = [state.expertiseAfterSmartChats, state.expertiseAfterInterview, state.expertiseAfterQuiz, state.vrExpertiseLevel]
+    .map(readinessPoints).filter(point => point !== null);
+  const average = points.length ? points.reduce((sum, point) => sum + point, 0) / points.length : 0;
+  if (average >= 2.75) return 'Expert';
+  if (average >= 1.75) return 'Intermediate';
   return 'Basic';
 }
 

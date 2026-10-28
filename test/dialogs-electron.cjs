@@ -77,7 +77,7 @@ app.whenReady().then(async()=>{
    await js('window.__smallReset=confirmTrainingReset();true');check('dark confirmation fits narrow window with safe default action',await js("(()=>{const r=$('wahDialog').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight&&document.activeElement===$('wahDialogPrimary')&&getComputedStyle($('wahDialog')).backgroundColor==='rgb(20, 43, 66)';})()"));await capture('19-modal-reset-narrow');await key('Escape');await wait("!$('wahDialog').open");
    dialog.showOpenDialog=async()=>{throw Error('Synthetic chooser failure');};
    await js('window.__vrFailure=analyzeVrReport();true');await wait("$('wahDialog').open");
-   check('actual Word import failure preserves recovery message without completing VR',await js("$('wahDialogBody').textContent==='Unable to read this Word report. Select a valid .docx file within the supported size limits.' && !state.vrCompleted"));await js("$('wahDialogPrimary').click();true");await js('window.__vrFailure');
+   check('actual Word import failure preserves recovery message without completing VR',await js("$('wahDialogBody').textContent==='Unable to read this report. Select a valid .json or .docx VR report within the supported size limits.' && !state.vrCompleted"));await js("$('wahDialogPrimary').click();true");await js('window.__vrFailure');
    dialog.showOpenDialog=async()=>{opens++;return {canceled:true,filePaths:[]};};
    const beforeSaves=saves,beforeOpens=opens;await js("$('downloadEbook').click();analyzeVrReport();true");await wait("!$('wahDialog').open");
    check('native chooser cancellations remain native and produce no notices',saves===beforeSaves+1&&opens===beforeOpens+1);

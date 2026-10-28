@@ -1,7 +1,7 @@
 // WAH <-> SafeHeight VR contract: runtime gate for every message crossing the bridge.
 // Mirrors integration/vr/schemas/*.schema.json; test/vr-contract.test.cjs keeps both in agreement.
 // Errors name the field path only, never the received value (it is untrusted learner/device data).
-const { randomUUID } = require('node:crypto');
+const { randomUUID, createHash } = require('node:crypto');
 
 const PLAN_SCHEMA = 'wah.session_plan';
 const LOG_SCHEMA = 'safeheight.vr_event_log';
@@ -229,8 +229,84 @@ function scenarioConfigFor(plan) {
   return config;
 }
 
+// Stable pseudonym for the study: the e-mail itself never leaves the main process. Not a secret (anyone holding the e-mail can recompute it), only a non-reversible label.
+function pseudonymFor(email) {
+  const normalized = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  check(normalized.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized), 'email');
+  return 'L-' + createHash('sha256').update('wah-vr-pseudonym-v1:' + normalized).digest('hex').slice(0, 8);
+}
+
+const levelKey = value => LEVELS.find(level => level === String(value || '').toLowerCase()) || null;
+
+// Builds and validates the plan that goes to the headset. `input` comes from the renderer (levels as shown in the UI: "Basic"...); the e-mail becomes a pseudonym here.
+function buildSessionPlan({ email, smartChatsLevel, interviewLevel, quizLevel, quizScorePct, weakTopics = [], mode = 'study', phase = 'pre_test', attempt = 1 }, now = new Date()) {
+  const topics = (Array.isArray(weakTopics) ? weakTopics : [])
+    .filter(t => object(t) && integer(t.module, 1, 8) && typeof t.chapter === 'string' && CHAPTER.test(t.chapter) && text(t.topic))
+    .map(t => ({ module: t.module, chapter: t.chapter, topic: t.topic }));
+  const unique = [...new Map(topics.map(t => [`${t.module}-${t.chapter}`, t])).values()].slice(0, 64);
+  const plan = {
+    schema: PLAN_SCHEMA, schema_version: '1.0', plan_id: randomUUID(), created_at_utc: now.toISOString(),
+    learner: { pseudonym: pseudonymFor(email), language: 'en' },
+    assessment: { smartchats_level: levelKey(smartChatsLevel), interview_level: levelKey(interviewLevel), quiz_level: levelKey(quizLevel), quiz_score_pct: quizScorePct },
+    vr: { mode, level: levelKey(quizLevel), training_id: 'weather_hazards', phase, attempt, weak_topics: unique }
+  };
+  return validateSessionPlan(plan);
+}
+
+// Rule table for the VR level when the report is JSON. The first matching row wins; no text parsing, no model.
+// Never reads learner_profile.level: in study mode it differs from the preset actually applied.
+// `rule` is the row number of the table in the plan doc (1 = rejected by acceptVrReport, so it never appears here).
+function vrLevelFor(log) {
+  const failures = log.director.critical_failures;
+  const said = log.weather.said_vs_did !== undefined ? log.weather.said_vs_did : saidVsDid(log);
+  const result = (rule, code, level, reason) => ({ rule, code, level: level && LEVEL_LABELS[level], reason });
+  if (log.completed === false || log.end_reason !== 'Results' || log.verdict === 'incomplete') return result(2, 'incomplete', null, 'The VR session did not reach the results screen, so it cannot be rated. Run a new VR session.');
+  if (log.safety_classification === 'unsafe' || log.verdict === 'critical_risk' || log.final_decision === 'continued_inspection_in_rain' || failures >= 2) return result(3, 'critical', 'basic', 'Critical decisions in the storm (continued inspecting in the rain or repeated critical failures).');
+  if (log.safety_classification === 'partially_safe' || log.descent.during_rain || log.descent.premature || failures >= 1 || said === 'inconsistent'
+    || log.stopped_after_intervention === true || log.verdict === 'time_up' || log.scenario_config?.preset === 'basic') return result(4, 'capped', 'intermediate', 'Safe overall, but with a descent in the rain, an inconsistent answer, a safety intervention, time out or the Basic scenario: capped at Intermediate.');
+  if (log.safety_classification === 'safe' && log.verdict === 'safe_decisions' && failures === 0 && said !== 'inconsistent' && log.ppe.all_correct && log.lifeline.connected_before_ascent === true) return result(5, 'safe', 'expert', 'Safe decisions with correct PPE and the lifeline connected before the ascent.');
+  return result(6, 'default', 'intermediate', 'No critical failure, but not every Expert condition was met.');
+}
+
+// Rejects what does not belong to this learner's session. 1.4 reports carry no plan, so they are accepted unbound (`bound: false`); 1.5+ must answer the plan WAH issued.
+function acceptVrReport(raw, { planId = null, seenSessionIds = [] } = {}) {
+  let log;
+  try { log = parseVrReport(raw); } catch (error) { return { accepted: false, code: 'invalid', message: error.message }; }
+  const bound = log.plan !== undefined;
+  if (bound && (log.plan === null || log.plan.plan_id !== planId)) return { accepted: false, code: 'other_plan', message: 'This report answers a different VR session plan. Save the plan again and run a new VR session.' };
+  if (seenSessionIds.some(id => String(id).toLowerCase() === log.session_id.toLowerCase())) return { accepted: false, code: 'duplicate_session', message: 'This VR report was already imported.' };
+  return { accepted: true, log, bound, rating: vrLevelFor(log) };
+}
+
+function parseVrReport(raw) {
+  const size = Buffer.isBuffer(raw) ? raw.length : typeof raw === 'string' ? Buffer.byteLength(raw) : -1;
+  check(size > 0 && size <= MAX_MESSAGE_BYTES, 'report.size');
+  let log;
+  try { log = JSON.parse(String(raw)); } catch (_) { fail('report.json'); }
+  noPrototypeKeys(log);
+  return validateEventLog(log);
+}
+
+// Plain-text digest for the debriefing and the language model: only enum values and numbers of the validated report, never free text from the device.
+const SAFE_KEY = /^[A-Za-z0-9_.:-]{1,80}$/;
+function reportDigest(log) {
+  const yn = value => value === null || value === undefined ? 'not recorded' : value ? 'yes' : 'no';
+  const lines = [
+    `VR session ${log.completed ? 'completed' : 'not completed'} (end reason: ${log.end_reason}); duration ${Math.round(log.duration_s)} s.`,
+    `Safety classification: ${log.safety_classification}. Verdict: ${log.verdict}. Final decision: ${log.final_decision}.`,
+    `Critical failures: ${log.director.critical_failures}${log.director.incident_keys.filter(key => SAFE_KEY.test(key)).length ? ` (${log.director.incident_keys.filter(key => SAFE_KEY.test(key)).join(', ')})` : ''}.`,
+    `PPE all correct: ${yn(log.ppe.all_correct)}${log.ppe.missed.filter(key => SAFE_KEY.test(key)).length ? `; missed: ${log.ppe.missed.filter(key => SAFE_KEY.test(key)).join(', ')}` : ''}. Lifeline connected before ascent: ${yn(log.lifeline.connected_before_ascent)}.`,
+    `Photos sent: ${log.inspection.photos_sent} of ${log.inspection.photo_goal}.`,
+    `Declared decision in the storm: ${log.weather.declared_decision || 'none'}. Behavior after the foreman's call: ${log.supervisor_pressure.response}. Said versus did: ${(log.weather.said_vs_did !== undefined ? log.weather.said_vs_did : saidVsDid(log)) || 'not applicable'}.`,
+    `Descent during rain: ${yn(log.descent.during_rain)}; premature descent: ${yn(log.descent.premature)}; stopped after safety supervisor intervention: ${yn(log.stopped_after_intervention)}.`
+  ];
+  if (log.scenario_config) lines.push(`Scenario applied: ${log.scenario_config.preset} preset${log.scenario_config.mode ? `, ${log.scenario_config.mode} mode` : ''}.`);
+  return lines.join('\n');
+}
+
 module.exports = {
   PLAN_SCHEMA, LOG_SCHEMA, MAX_MESSAGE_BYTES, TOPICS, LEVELS, MODES, PHASES, LEVEL_LABELS, PRESETS,
   validateSessionPlan, validateEventLog, validateScenarioConfig, validatePlanAck, validateReportAck, validateEnvelope,
-  parseMessage, makeEnvelope, saidVsDid, scenarioConfigFor
+  parseMessage, makeEnvelope, saidVsDid, scenarioConfigFor,
+  pseudonymFor, buildSessionPlan, vrLevelFor, acceptVrReport, parseVrReport, reportDigest
 };

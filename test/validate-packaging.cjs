@@ -34,7 +34,7 @@ const entries = new Set(asar.listPackage(archive).map(name => name.replaceAll('\
 assert.ok(![...entries].some(name => name.startsWith('/node_modules/pdf-lib/')), 'Test-only PDF parser must not ship');
 assert.ok(![...entries].some(name => name.startsWith('/docs/debriefing-pdf/')), 'Synthetic review artifacts must not ship');
 assert.ok(![...entries].some(name => name.startsWith('/docs/final-welcome/')), 'Welcome comparison artifacts must not ship');
-for (const file of ['src/main.js', 'src/preload.js', 'src/renderer.js', 'src/dialogs.js', 'src/certificate.js', 'src/certificate.css', 'src/certificate.html', 'src/certificate-pdf.cjs', 'src/security.cjs', 'src/styles.css',
+for (const file of ['src/main.js', 'src/preload.js', 'src/renderer.js', 'src/dialogs.js', 'src/certificate.js', 'src/certificate.css', 'src/certificate.html', 'src/certificate-pdf.cjs', 'src/security.cjs', 'src/vr-contract.cjs', 'src/styles.css',
   'src/services.cjs', 'src/index.html', 'data/question-bank.json', 'data/final-quiz-bank.json',
   'node_modules/papaparse/papaparse.min.js', 'docs/NR35_Revised_Professional_Ebook_Combined.docx',
   ...['jake-miller', 'emily-carter', 'carlos-rivera', 'beatrice-johnson'].map(name => 'src/assets/instructors/' + name + '.png'),
