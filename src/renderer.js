@@ -11,6 +11,8 @@ const state = {
   quizCompleted: false, quizScore: null, expertiseAfterQuiz: null,
   vrCompleted: false, vrExpertiseLevel: null, debriefingCompleted: false, certificateDownloaded: false,
   vrPlan: null, vrSessionIds: [],
+  // Phase 4: weather probe before the VR and after the review quiz, presence (SUS) after the VR, structured VR fields for the debriefing.
+  probe: { pre: null, post: null }, presence: null, vrValidity: null, vrFacts: null, vrReviewChapters: [], review: null,
   interview: { currentModule: 1, currentLevel: 'basic', history: [], usedIds: [], recommendations: [], summary: '' },
   quiz: { currentModule: 1, currentLevel: 'basic', history: [], usedIds: [], recommendations: [], summary: '', module5ExpertEncountered: false, activeQuestion: null, pendingNext: null },
   debriefing: { vrReportFileName: '', vrReportText: '', vrSummary: '', history: [], turn: 0, followUpAsked: false, summary: '' }
@@ -249,6 +251,7 @@ function renderVrStatus(analyzing = false, rejected = null) {
   if (analyzing) textParagraph(root, '', 'Analyzing VR experience...');
   else {
     textParagraph(root, 'VR Expertise Level:', normalizeReadinessLevel(state.vrExpertiseLevel) || 'Not rated');
+    if (state.vrValidity === 'inconclusive') textParagraph(root, 'VR result:', 'Inconclusive (low sense of presence). The level is kept as recorded.');
     textParagraph(root, '', state.debriefing.vrSummary || 'VR report analyzed.');
   }
 }
@@ -1064,6 +1067,9 @@ function setTab(tab) {
   $(`tab${tab}`).classList.add('active');
   document.querySelectorAll('.tabs button').forEach(btn => btn.classList.toggle('active', Number(btn.dataset.tab) === tab));
   if (tab === 7) updateCertificatePreview();
+  if (tab === 5 || tab === 7) refreshPhase4();
+  // The plan's pseudonym picks the weather-check form, so step 5 makes sure the plan exists.
+  if (tab === 5 && !state.vrPlan && state.quizCompleted) ensureVrPlan().then(() => refreshPhase4()).catch(() => {});
   updateStatus();
   saveSession();
 }
@@ -1121,16 +1127,16 @@ function certificateQualification(level) {
 }
 function updateCertificatePreview() {
   const overall = calculateOverallReadiness();
-  window.wahCertificate.render(document.querySelector('.certificateInner'), {
-    name: state.studentName || 'Learner Name', readiness: overall, qualification: certificateQualification(overall),
-    date: certificateCompletionDate()
-  });
+  const certificate = { name: state.studentName || 'Learner Name', readiness: overall, qualification: certificateQualification(overall), date: certificateCompletionDate() };
+  const weather = weatherCheckLine();
+  if (weather) certificate.weather = weather;
+  window.wahCertificate.render(document.querySelector('.certificateInner'), certificate);
   if ($('certEmail')) $('certEmail').textContent = state.studentEmail || 'Not available';
   if ($('certDate')) $('certDate').textContent = certificateCompletionDate();
   if ($('certSmart')) $('certSmart').textContent = state.expertiseAfterSmartChats || 'Not available';
   if ($('certInterview')) $('certInterview').textContent = state.expertiseAfterInterview || 'Not available';
   if ($('certQuiz')) $('certQuiz').textContent = state.expertiseAfterQuiz || 'Not available';
-  if ($('certVR')) $('certVR').textContent = normalizeReadinessLevel(state.vrExpertiseLevel) || 'Not rated';
+  if ($('certVR')) $('certVR').textContent = (normalizeReadinessLevel(state.vrExpertiseLevel) || 'Not rated') + (state.vrValidity === 'inconclusive' ? ' (inconclusive: low presence)' : '');
   if ($('certOverallLevel')) $('certOverallLevel').textContent = overall;
   if ($('certOverallBadge')) {
     $('certOverallBadge').textContent = overall;
@@ -1214,6 +1220,7 @@ function resetIncompleteWorkFromTab(tab) {
     state.interview = { currentModule: 1, currentLevel: 'basic', history: [], usedIds: [], recommendations: [], summary: '', activeQuestion: null };
   }
   if (tab <= 4) {
+    state.probe = { pre: null, post: null };
     state.vrPlan = null;
     state.quizCompleted = false;
     state.quizScore = null;
@@ -1227,8 +1234,14 @@ function resetIncompleteWorkFromTab(tab) {
     state.debriefing.vrReportFileName = '';
     state.debriefing.vrReportText = '';
     state.debriefing.vrSummary = '';
+    state.presence = null;
+    state.vrValidity = null;
+    state.vrFacts = null;
+    state.vrReviewChapters = [];
   }
   if (tab <= 6) {
+    state.review = null;
+    state.probe = { pre: state.probe ? state.probe.pre : null, post: null };
     state.debriefingCompleted = false;
     state.debriefing.history = [];
     state.debriefing.turn = 0;
@@ -1299,9 +1312,8 @@ function rebuildInterfaceFromState(resumeTab = getFirstUnfinishedTab(state)) {
   if ($('vrReportStatus')) {
     renderVrStatus();
   }
-  if ($('continueDebriefing')) $('continueDebriefing').disabled = !state.vrCompleted;
-  if ($('startDebrief')) $('startDebrief').disabled = !state.vrCompleted;
   if ($('continueCertificate')) $('continueCertificate').disabled = !state.debriefingCompleted;
+  refreshPhase4();
 
   renderInstructorCards();
   updateInstructorHeader();
@@ -1386,6 +1398,12 @@ function resetProgramForRetake() {
   state.vrExpertiseLevel = null;
   state.vrPlan = null;
   state.vrSessionIds = [];
+  state.probe = { pre: null, post: null };
+  state.presence = null;
+  state.vrValidity = null;
+  state.vrFacts = null;
+  state.vrReviewChapters = [];
+  state.review = null;
   state.debriefingCompleted = false;
   state.certificateDownloaded = false;
 
@@ -1423,6 +1441,8 @@ function resetProgramForRetake() {
   if ($('continueDebriefing')) $('continueDebriefing').disabled = true;
   if ($('startDebrief')) $('startDebrief').disabled = true;
   if ($('continueCertificate')) $('continueCertificate').disabled = true;
+  if ($('reviewFeedback')) $('reviewFeedback').replaceChildren();
+  refreshPhase4();
 
   lockTabsAfterOrientation();
   setTab(1);
@@ -2121,6 +2141,204 @@ function startQuizAdaptive() {
 }
 
 
+// ---- Phase 4: weather probe, presence, review quiz ----
+// Same rules as src/post-assessment.cjs (main process); test/post-assessment.test.cjs keeps them in agreement.
+
+// Slater-Usoh-Steed presence questionnaire (6 items, 1-7), worded for the SafeHeight storm scenario.
+const PRESENCE_ITEMS = [
+  { prompt: 'Rate your sense of being on the work site, where 7 is your normal experience of being in a place.', low: 'Not at all', high: 'Very much' },
+  { prompt: 'To what extent were there times during the experience when the virtual work site was the reality for you?', low: 'At no time', high: 'Almost all the time' },
+  { prompt: 'When you think back, do you think of the work site more as images that you saw, or more as somewhere that you visited?', low: 'Images that I saw', high: 'Somewhere that I visited' },
+  { prompt: 'During the experience, which was strongest on the whole: your sense of being on the work site, or of being elsewhere?', low: 'Being elsewhere', high: 'Being on the work site' },
+  { prompt: 'Think of your memory of the work site. How similar is it to the memory of other places you have been today (how visual, vivid, in colour and around you it is)?', low: 'Not at all similar', high: 'Very similar' },
+  { prompt: 'During the experience, did you often think to yourself that you were actually on the work site?', low: 'Not very often', high: 'Very often' }
+];
+// Mean below the scale midpoint = low presence = VR result inconclusive, level unchanged. To be calibrated with the professor.
+const LOW_PRESENCE_MEAN = 4;
+function presenceScore(answers) {
+  if (!Array.isArray(answers) || answers.length !== PRESENCE_ITEMS.length || !answers.every(a => Number.isInteger(a) && a >= 1 && a <= 7)) return null;
+  const mean = Math.round((answers.reduce((sum, a) => sum + a, 0) / PRESENCE_ITEMS.length) * 100) / 100;
+  return { mean, highCount: answers.filter(a => a >= 6).length, validity: mean < LOW_PRESENCE_MEAN ? 'inconclusive' : 'valid' };
+}
+
+let climateProbe = null; // data/climate-probe.json, forms A and B
+const drafts = { pre: [], post: [], presence: [], review: [] };
+const shownProbeForm = { pre: null, post: null }; // the form on screen is the form that is stored
+
+// Counterbalanced by the pseudonym (never the e-mail): even last hex digit -> A before / B after, odd -> B before / A after.
+function probeFormFor(phase) {
+  if (phase === 'post' && state.probe.pre) return state.probe.pre.form === 'A' ? 'B' : 'A';
+  const pseudonym = state.vrPlan && state.vrPlan.learner ? String(state.vrPlan.learner.pseudonym || '') : '';
+  const digit = parseInt(pseudonym.slice(-1), 16);
+  return Number.isInteger(digit) && digit % 2 === 1 ? 'B' : 'A';
+}
+function probeScore(entry) {
+  const items = entry && climateProbe && climateProbe.forms[entry.form];
+  if (!items || !Array.isArray(entry.answers) || entry.answers.length !== items.length) return null;
+  return { score: entry.answers.filter((a, i) => a === items[i].correctIndex).length, total: items.length };
+}
+function weatherCheckLine() {
+  const before = probeScore(state.probe.pre);
+  if (!before) return null;
+  const after = probeScore(state.probe.post);
+  return `Weather check (module 5): before VR ${before.score}/${before.total} · after review ${after ? `${after.score}/${after.total}` : 'not taken'}`;
+}
+
+// Radio groups whose choices are kept in `draft` (no DOM reads on submit). Labels are trusted application text, rendered as text.
+function renderChoiceItems(root, name, items, draft, scale = false) {
+  if (!root) return;
+  root.replaceChildren();
+  items.forEach((item, i) => {
+    const fieldset = textNode('fieldset', '', 'surveyItem');
+    fieldset.appendChild(textNode('legend', `${i + 1}. ${item.prompt}`));
+    const group = textNode('div', '', scale ? 'surveyScale' : '');
+    item.options.forEach((label, value) => {
+      const choice = textNode('label', '', 'surveyChoice');
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = `${name}-${i}`;
+      input.value = String(value);
+      input.checked = draft[i] === value;
+      input.addEventListener('change', () => { draft[i] = value; });
+      choice.appendChild(input);
+      choice.appendChild(document.createTextNode(label));
+      group.appendChild(choice);
+    });
+    fieldset.appendChild(group);
+    root.appendChild(fieldset);
+  });
+}
+const presenceOptions = item => [1, 2, 3, 4, 5, 6, 7].map(n => n === 1 ? `1 · ${item.low}` : n === 7 ? `7 · ${item.high}` : String(n));
+const allAnswered = (draft, count) => draft.length === count && [...Array(count).keys()].every(i => Number.isInteger(draft[i]));
+
+function pickChoice(kind, index, value) { drafts[kind][index] = value; }
+
+function renderProbe(phase) {
+  const form = probeFormFor(phase);
+  if (shownProbeForm[phase] !== form) drafts[phase] = [];
+  shownProbeForm[phase] = form;
+  renderChoiceItems($(phase === 'pre' ? 'probePreItems' : 'probePostItems'), `probe-${phase}`, climateProbe.forms[form].map(item => ({ prompt: item.prompt, options: item.options })), drafts[phase]);
+}
+
+async function submitProbe(phase) {
+  const form = shownProbeForm[phase] || probeFormFor(phase);
+  const items = climateProbe && climateProbe.forms[form];
+  if (!items) return showInfo('The weather check could not be loaded. Restart the application.', 'Weather check unavailable');
+  if (state.probe[phase]) return;
+  if (!allAnswered(drafts[phase], items.length)) return showInfo('Answer every question of the weather check before submitting.', 'Weather check incomplete');
+  state.probe[phase] = { form, answers: drafts[phase].slice(0, items.length), completedAt: new Date().toISOString() };
+  drafts[phase] = [];
+  refreshPhase4();
+  saveSession();
+}
+
+async function submitPresence() {
+  if (!state.vrCompleted || state.presence) return;
+  const answers = drafts.presence.map(value => value + 1); // choice index 0-6 -> score 1-7
+  const score = allAnswered(drafts.presence, PRESENCE_ITEMS.length) ? presenceScore(answers) : null;
+  if (!score) return showInfo('Answer all six questions before submitting.', 'Questionnaire incomplete');
+  state.presence = { instrument: 'SUS', answers, ...score, completedAt: new Date().toISOString() };
+  // Low presence makes the VR result inconclusive; the VR level itself is never changed here.
+  state.vrValidity = score.validity;
+  drafts.presence = [];
+  renderVrStatus();
+  refreshPhase4();
+  updateStatus();
+  saveSession();
+}
+
+// Review quiz (post-test): one question per chapter, chapters from the VR events first, then the quiz recommendations.
+const DEFAULT_REVIEW_CHAPTERS = [{ module: 5, chapter: '5.2', topic: 'Weather in the Risk Assessment' }, { module: 5, chapter: '5.6', topic: 'Weather as a Possible Restrictive Condition' }];
+const REVIEW_MAX = 6;
+function buildReviewQuiz() {
+  const chapters = [];
+  for (const c of [...(state.vrReviewChapters || []), ...(state.quiz.recommendations || [])]) {
+    if (c && !chapters.some(x => x.module === c.module && x.chapter === c.chapter)) chapters.push({ module: c.module, chapter: c.chapter, topic: c.topic });
+  }
+  if (!chapters.length) chapters.push(...DEFAULT_REVIEW_CHAPTERS);
+  const used = new Set(state.quiz.history.map(h => h.question.id));
+  const questionIds = [];
+  for (const c of chapters) {
+    if (questionIds.length >= REVIEW_MAX) break;
+    const pool = finalQuizBank.filter(q => !used.has(q.id) && !questionIds.includes(q.id) && (q.recommendedChapters || []).some(r => r.module === c.module && r.chapter === c.chapter));
+    const q = pool.find(q => q.difficulty === 'intermediate') || pool[0];
+    if (q) questionIds.push(q.id);
+  }
+  return { chapters: chapters.slice(0, REVIEW_MAX), questionIds, history: [], completed: false };
+}
+const reviewQuestions = () => (state.review ? state.review.questionIds : []).map(id => finalQuizBank.find(q => q.id === id)).filter(Boolean);
+
+function submitReview() {
+  if (!state.review || state.review.completed) return;
+  const questions = reviewQuestions();
+  if (!allAnswered(drafts.review, questions.length)) return showInfo('Answer every review question before submitting.', 'Review quiz incomplete');
+  state.review.history = questions.map((q, i) => ({ questionId: q.id, selectedIndex: drafts.review[i], correct: drafts.review[i] === q.correctIndex }));
+  state.review.completed = true;
+  state.review.completedAt = new Date().toISOString();
+  drafts.review = [];
+  refreshPhase4();
+  saveSession();
+}
+function renderReviewFeedback() {
+  const root = $('reviewFeedback');
+  if (!root) return;
+  root.replaceChildren();
+  if (!state.review || !state.review.completed) return;
+  const correct = state.review.history.filter(h => h.correct).length;
+  textParagraph(root, 'Review quiz:', `${correct} of ${state.review.history.length} correct.`);
+  state.review.history.forEach((h, i) => {
+    const q = finalQuizBank.find(item => item.id === h.questionId);
+    if (!q) return;
+    const line = textNode('p', '', `reviewResult ${h.correct ? 'correct' : 'incorrect'}`);
+    line.appendChild(textNode('strong', `${i + 1}. ${h.correct ? 'Correct' : 'Incorrect'}. `));
+    line.appendChild(document.createTextNode(`${q.options[q.correctIndex]} ${q.explanation || ''}`.trim()));
+    root.appendChild(line);
+  });
+}
+
+// The post-test is required only for sessions that took the weather check before the VR (sessions from before phase 4 are not blocked).
+const postTestPending = () => Boolean(state.probe.pre) && !(state.review && state.review.completed && state.probe.post);
+
+function refreshPhase4() {
+  const preDone = Boolean(state.probe.pre) || state.vrCompleted;
+  if ($('probePrePanel')) $('probePrePanel').classList.toggle('hidden', preDone);
+  if (!preDone && climateProbe) renderProbe('pre');
+  for (const id of ['connectQuest', 'saveVrPlan', 'uploadVrReport']) if ($(id)) $(id).disabled = !preDone;
+
+  const presencePending = state.vrCompleted && !state.presence;
+  if ($('presencePanel')) $('presencePanel').classList.toggle('hidden', !presencePending);
+  if (presencePending) renderChoiceItems($('presenceItems'), 'presence', PRESENCE_ITEMS.map(item => ({ prompt: item.prompt, options: presenceOptions(item) })), drafts.presence, true);
+  if ($('presenceStatus')) $('presenceStatus').textContent = state.presence ? `Questionnaire saved${state.vrValidity === 'inconclusive' ? '. The VR result is marked inconclusive.' : '.'}` : '';
+  const vrReady = state.vrCompleted && Boolean(state.presence);
+  if ($('continueDebriefing')) $('continueDebriefing').disabled = !vrReady;
+  if ($('startDebrief')) $('startDebrief').disabled = !vrReady;
+
+  const showPost = state.debriefingCompleted && Boolean(state.probe.pre);
+  if ($('postTestPanel')) $('postTestPanel').classList.toggle('hidden', !showPost);
+  if (showPost && !state.review && finalQuizBank.length) { state.review = buildReviewQuiz(); saveSession(); }
+  if (showPost && state.review && !state.review.completed) {
+    renderChoiceItems($('reviewItems'), 'review', reviewQuestions().map(q => ({ prompt: q.question, options: q.options })), drafts.review);
+  } else if ($('reviewItems')) $('reviewItems').replaceChildren();
+  if ($('submitReview')) $('submitReview').classList.toggle('hidden', Boolean(state.review && state.review.completed));
+  renderReviewFeedback();
+  const postOpen = showPost && Boolean(state.review && state.review.completed) && !state.probe.post;
+  if ($('probePostBox')) $('probePostBox').classList.toggle('hidden', !postOpen);
+  if (postOpen && climateProbe) renderProbe('post');
+  if ($('postTestStatus')) $('postTestStatus').textContent = showPost ? (postTestPending() ? 'Finish the review quiz and the weather check to download your certificate.' : 'Post-test complete.') : '';
+  if ($('downloadCertificate')) $('downloadCertificate').disabled = postTestPending();
+  if (state.currentTab === 7 || showPost) updateCertificatePreview();
+}
+
+// Debriefing opening from the structured fields (fixed phrases, no model): what the learner answered on the tablet x what they did after the foreman's call.
+const DECLARED_TEXT = { keep_inspecting: 'keep inspecting', stop_and_wait: 'stop and wait', descend_now: 'descend right away' };
+const BEHAVIOR_TEXT = { stopped_and_waited: 'you stopped and waited', continued_inspection: 'you kept inspecting', descended_during_rain: 'you went down while it was raining', photographed_before_pressure: 'you were still taking photos when the call came' };
+function saidVsDidSentence(facts = state.vrFacts) {
+  if (!facts || !DECLARED_TEXT[facts.declared_decision] || !BEHAVIOR_TEXT[facts.behavior_after_call] || !['consistent', 'inconsistent'].includes(facts.said_vs_did)) return '';
+  return facts.said_vs_did === 'consistent'
+    ? `On the tablet you chose to ${DECLARED_TEXT[facts.declared_decision]}, and after the foreman's call ${BEHAVIOR_TEXT[facts.behavior_after_call]}, as you had said.`
+    : `On the tablet you chose to ${DECLARED_TEXT[facts.declared_decision]}, but after the foreman's call ${BEHAVIOR_TEXT[facts.behavior_after_call]}.`;
+}
+
 function addDebriefMsg(role, text, options = {}) {
   const div = document.createElement('div');
   div.className = `msg ${role}`;
@@ -2185,14 +2403,19 @@ async function importVrResult(result) {
   if (rating && !rating.level) { renderVrStatus(false, { fileName: result.fileName, reason: rating.reason }); saveSession(); return; }
   state.debriefing.vrReportFileName = result.fileName;
   state.debriefing.vrReportText = result.text || '';
+  // A new VR session needs its own presence answers; the structured fields exist only for JSON reports.
+  state.vrFacts = rating && result.facts ? result.facts : null;
+  state.vrReviewChapters = rating && Array.isArray(result.reviewChapters) ? result.reviewChapters : [];
+  state.presence = null;
+  state.vrValidity = null;
+  state.review = null;
   renderVrStatus(true);
   if ($('continueDebriefing')) $('continueDebriefing').disabled = true;
   if ($('startDebrief')) $('startDebrief').disabled = true;
   await summarizeVrReport(rating);
   state.vrCompleted = true;
   renderVrStatus();
-  if ($('continueDebriefing')) $('continueDebriefing').disabled = false;
-  if ($('startDebrief')) $('startDebrief').disabled = false;
+  refreshPhase4();
   updateStatus();
   saveSession();
 }
@@ -2216,7 +2439,9 @@ function debriefingOpening() {
   // Derive again for legacy sessions and never trust a stale saved takeaway.
   const takeaway = deriveVrTakeaway(state.debriefing.vrSummary, state.debriefing.vrReportText);
   state.debriefing.vrTakeaway = takeaway;
-  return `I've reviewed your VR experience report. ${takeaway ? takeaway + ' ' : ''}I'd like to hear your perspective in your own words on the experience before we reflect on the wider learning track. What part of the VR activity felt most realistic, useful, or challenging to you?`;
+  // A JSON report opens with what the learner said versus did (structured fields); a Word report keeps the grounded takeaway.
+  const observation = saidVsDidSentence() || takeaway;
+  return `I've reviewed your VR experience report. ${observation ? observation + ' ' : ''}I'd like to hear your perspective in your own words on the experience before we reflect on the wider learning track. What part of the VR activity felt most realistic, useful, or challenging to you?`;
 }
 
 function buildDebriefingContext() {
@@ -2229,9 +2454,11 @@ function buildDebriefingContext() {
     vrExpertiseLevel: state.vrExpertiseLevel,
     vrSummary: state.debriefing.vrSummary,
     vrTakeaway: deriveVrTakeaway(state.debriefing.vrSummary, state.debriefing.vrReportText),
-    // Context only, never directly narrated. Bound the service request; retain
-    // the complete imported report in state and on the existing analysis path.
-    vrReportEvidence: String(state.debriefing.vrReportText || '').slice(0, 12000),
+    // JSON report: structured fields only (enums, numbers, booleans validated in the main process), never report text.
+    // Word report (fallback): the extracted text as before, bounded. Context only, never directly narrated.
+    ...(state.vrFacts
+      ? { vrStructuredFields: state.vrFacts, vrResultValidity: state.vrValidity || 'not recorded', presenceSusMean: state.presence ? state.presence.mean : null }
+      : { vrReportEvidence: String(state.debriefing.vrReportText || '').slice(0, 12000) }),
     recentDebriefingMessages: state.debriefing.history.slice(-8)
   };
 }
@@ -2359,6 +2586,7 @@ function finishDebriefing() {
   }
   $('debriefBox').classList.add('hidden');
   $('debriefComplete').classList.remove('hidden');
+  refreshPhase4();
   updateStatus();
   saveSession();
 }
@@ -2367,6 +2595,7 @@ async function init() {
   questionBank = await window.appApi.readJson('data/question-bank.json');
   finalQuizBank = await window.appApi.readJson('data/final-quiz-bank.json');
   config = await window.appApi.readJson('data/config.json');
+  try { climateProbe = await window.appApi.readJson('data/climate-probe.json'); } catch (_) { climateProbe = null; }
   updateStatus();
   renderInstructorCards();
   updateInstructorHeader();
@@ -2466,6 +2695,11 @@ ${makeSegue(null, q)}`);
   $('saveVrPlan').addEventListener('click', saveVrPlan);
   $('connectQuest').addEventListener('click', connectQuest);
   listenToVrBridge();
+  $('submitProbePre').addEventListener('click', () => submitProbe('pre'));
+  $('submitPresence').addEventListener('click', submitPresence);
+  $('submitReview').addEventListener('click', submitReview);
+  $('submitProbePost').addEventListener('click', () => submitProbe('post'));
+  refreshPhase4();
   $('continueDebriefing').addEventListener('click', () => { unlock(6); setTab(6); saveSession(); });
   $('startDebrief').addEventListener('click', startDebriefing);
   $('submitDebriefAnswer').addEventListener('click', submitDebriefingAnswer);

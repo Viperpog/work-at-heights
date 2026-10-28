@@ -16,6 +16,7 @@
 .certificateSeal { color:var(--accent); }
 
 .certQualification { font-size:10px; line-height:1.45; color:var(--muted); margin:12px auto 0; max-width:580px; }
+.certWeather { font-size:11px; color:var(--ink); margin:10px 0 0; font-weight:600; }
 .certCompletionDate { font-size:11px; color:var(--muted); margin:12px 0 0; }
 .certRecord { font-size:10px; color:var(--muted); margin:16px 0 0; }
 .certificatePrint { margin:0; font-family:Inter,Arial,sans-serif; --gold:#9f7b30; --navy:#101f31; --muted:#72808f; --line:#e2e7e8; --accent:#167f82; }

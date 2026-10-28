@@ -1,0 +1,123 @@
+{
+  "id": "wah-weather-probe",
+  "version": "0.1",
+  "module": 5,
+  "status": "To be calibrated with the professor: item wording, equivalence of forms A and B, and whether 5 items are enough.",
+  "design": "Two parallel forms. Item n of A and item n of B test the same chapter with a different situation. No feedback is shown. The items avoid the decision the VR measures (stop and wait, descend, or keep inspecting when the storm arrives, and the foreman's pressure), so the probe before the VR is never a hint.",
+  "forms": {
+    "A": [
+      {
+        "chapter": "5.2",
+        "prompt": "Before a rooftop task, the forecast shows thunderstorms later in the day. What should happen with this information?",
+        "options": [
+          "Nothing: forecasts change too often to plan around.",
+          "It goes into the Risk Assessment, with the conditions under which the work must stop.",
+          "Workers bring rain jackets and the plan stays the same.",
+          "The team decides on site once the weather actually changes."
+        ],
+        "correctIndex": 1
+      },
+      {
+        "chapter": "5.6",
+        "prompt": "Light rain makes the scaffold platform slippery while you work. Which statement is correct?",
+        "options": [
+          "Rain is a comfort issue, not a safety issue.",
+          "The harness makes the slippery surface irrelevant.",
+          "Weather that compromises safety can be a restrictive condition and must be evaluated before work goes on.",
+          "It only needs to be mentioned at the end of the shift."
+        ],
+        "correctIndex": 2
+      },
+      {
+        "chapter": "5.10",
+        "prompt": "A Work Permit was issued in the morning under clear skies. After lunch the wind picks up and clouds build. What is required before the work resumes?",
+        "options": [
+          "The permit conditions are reviewed, and the work is revalidated or suspended.",
+          "Nothing: the permit is valid for the whole day.",
+          "A verbal OK from any coworker.",
+          "A new permit only if someone is injured."
+        ],
+        "correctIndex": 0
+      },
+      {
+        "chapter": "5.9",
+        "prompt": "Why does the team agree on how to reach the supervisor before starting work at height on a day with changing weather?",
+        "options": [
+          "It is a formality for the permit.",
+          "So the supervisor can track productivity.",
+          "It only matters when someone works alone.",
+          "So changes in conditions are reported and a decision to stop reaches everyone in time."
+        ],
+        "correctIndex": 3
+      },
+      {
+        "chapter": "5.12",
+        "prompt": "A coworker says NR-35 allows work to continue until the wind reaches a specific speed. What is the best response?",
+        "options": [
+          "Accept it, because a precise number sounds reliable.",
+          "The NR-35 material sets no such number; the Risk Assessment and the company procedures define when to stop.",
+          "Use the number unless someone objects.",
+          "Check it after the job is finished."
+        ],
+        "correctIndex": 1
+      }
+    ],
+    "B": [
+      {
+        "chapter": "5.2",
+        "prompt": "While planning a facade inspection, the team learns that strong gusts are expected in the afternoon. What should they do with this information?",
+        "options": [
+          "Leave it out, because wind is part of any outdoor job.",
+          "Plan to work faster and finish before the gusts.",
+          "Record it in the Risk Assessment together with the conditions that will stop the work.",
+          "Let each worker decide alone when it is too windy."
+        ],
+        "correctIndex": 2
+      },
+      {
+        "chapter": "5.6",
+        "prompt": "Fog reduces visibility on a telecom tower and the ladder rungs are wet. Which statement is correct?",
+        "options": [
+          "When weather compromises safety it may be a restrictive condition, to be evaluated before continuing.",
+          "Visibility only matters to drivers.",
+          "Experienced workers can ignore wet rungs.",
+          "It only needs to be reported after the climb."
+        ],
+        "correctIndex": 0
+      },
+      {
+        "chapter": "5.10",
+        "prompt": "A permit for a tank-roof job was issued before dawn. By mid-morning a weather front that was not in the plan is approaching. What is required before the job continues?",
+        "options": [
+          "Nothing: the permit covers the whole shift.",
+          "Only checking that the harness is still tight.",
+          "Asking the newest worker to keep an eye on the sky.",
+          "Reassessing the permit conditions, then revalidating the permit or suspending the work."
+        ],
+        "correctIndex": 3
+      },
+      {
+        "chapter": "5.9",
+        "prompt": "Your radio battery is low at the start of a job on a lighting tower, and rain is possible later. Why does this matter?",
+        "options": [
+          "It does not: radios are a convenience.",
+          "Without reliable communication, changes in conditions and stop decisions may not reach you in time.",
+          "Only the supervisor needs a working radio.",
+          "It only matters for the end-of-day report."
+        ],
+        "correctIndex": 1
+      },
+      {
+        "chapter": "5.12",
+        "prompt": "A website claims that NR-35 makes work safe whenever a storm is more than a given distance away. How should you treat this claim?",
+        "options": [
+          "Follow it, because distance is easy to estimate.",
+          "Use it only for night work.",
+          "Treat it as unverified: the NR-35 material gives no such number; follow the Risk Assessment and procedures.",
+          "Ask a coworker whether it sounds right, then continue."
+        ],
+        "correctIndex": 2
+      }
+    ]
+  }
+}

@@ -70,7 +70,7 @@ Initial proposal, to be calibrated in the pilot.
 5. **Debriefing and summary.** For JSON, the model receives a digest of validated enum/number fields (`reportDigest`), never the raw JSON or free text from the device, and is told it must not assign a level.
 
 **Pending decisions**
-- The certificate is still issued when the VR is not rated (and, later, when `vr_validity=inconclusive`). Decide whether to block it.
+- The certificate is still issued when the VR is not rated or `vr_validity=inconclusive` (phase 4). Decide whether to block it.
 - An incomplete JSON session leaves step 5 open; the only way past it without a new session is the `.docx` fallback.
 - 1.4 reports are accepted without plan binding. Reject them once the bridge build (1.5) is the only one in use.
 
@@ -86,6 +86,37 @@ Initial proposal, to be calibrated in the pilot.
 `test/vr-websocket.test.cjs` runs `mock-vr.cjs` against the real server: full cycle, plan resent per hello, connection cut before the plan ack and before the report ack (through a proxy), duplicates, other plan, invalid report, incomplete session, port in use, adb messages, and the IPC path of the main process.
 
 **Pending for the headset test:** the real `adb reverse` with the Quest 3 on USB; the VR bridge build's reconnect timing; and whether `hzdb`'s own adb conflicts with the one WAH finds (if so, point `WAH_ADB` to the same adb).
+
+## Phase 4: presence, probe and post-test
+
+Order for the learner: quiz → **weather check (before)** → VR → **presence questionnaire** → debriefing → **review quiz** → **weather check (after)** → certificate.
+
+1. **Weather check before the VR** (step 5). `data/climate-probe.json`: a fixed module 5 probe in two parallel forms, A and B (item *n* of both tests the same chapter with another situation). Counterbalanced by the plan's pseudonym: even last hex digit → A before / B after, odd → B before / A after. No feedback. Connect Quest, Save VR Session Plan and Upload stay locked until it is answered. The items stay away from what the VR measures (stop and wait × descend × keep inspecting, the foreman's pressure), so the probe is never a hint before the decision.
+2. **Presence** (step 5, right after a report is imported, JSON or Word): Slater-Usoh-Steed (SUS), 6 items on a 1–7 scale, worded for the work site. Stored: answers, mean, count of 6–7 answers (Slater's original score). **Mean < 4 → `vr_validity = inconclusive`**; the VR level is never changed. Continue to Debriefing waits for the questionnaire. A new VR session asks again.
+3. **Debriefing.** A JSON report gives the model the structured fields of the 1.5 report (`debriefFacts`: `said_vs_did`, declared decision, behavior after the call, final decision, classification, failures, PPE, lifeline, `scenario_config`), plus validity and SUS mean, and **no report text**. The opening states said × did with fixed phrases (no model). The Word fallback keeps its text as before.
+4. **Review quiz (post-test)** (step 7, after the debriefing). One question per chapter, at most 6: chapters from the VR events first (`reviewChaptersFor`), then the quiz recommendations; none of the quiz's own questions; intermediate when available. No chapters → 5.2 and 5.6. Correct answers and explanations after submitting.
+
+| VR event | Chapters |
+| --- | --- |
+| kept inspecting / photographing in the rain | 5.6, 5.7 |
+| descent in the rain or premature | 5.7, 5.5 |
+| `said_vs_did = inconsistent` | 5.12 |
+| safety supervisor intervention | 5.9 |
+| `verdict = time_up` | 5.3 |
+| critical failure | 5.7 |
+| PPE not all correct | 6.7 |
+| lifeline not connected before the ascent | 7.6 |
+
+5. **Weather check after** (step 7, the other form), then the certificate. The PDF and the screen show `Weather check (module 5): before VR x/5 · after review y/5`; the main process recomputes it (and the SUS) from the answers, never from the screen's numbers. The debriefing report also lists validity and the weather check. Sessions that never took the check before the VR are not blocked.
+
+`src/post-assessment.cjs` (main) and the "Phase 4" block of `renderer.js` share the rules; `test/post-assessment.test.cjs` keeps them in agreement.
+
+**To calibrate with the professor**
+- SUS cut-off (mean < 4, the scale midpoint) and the item wording for the work site; or another instrument (IPQ).
+- The probe items, the equivalence of forms A and B, and whether 5 items are enough.
+- The event → chapter map and the 6-question limit of the review quiz.
+- The certificate is still issued with `vr_validity = inconclusive` (same pending decision as "Not rated").
+- Answering the presence questionnaire after a restart: if the app closes between the report and the questionnaire, the session resumes at step 6 with the debriefing locked; the learner goes back to step 5 to answer it.
 
 ## Running the simulators
 

@@ -433,3 +433,15 @@ summary { cursor:pointer; }
   .modalHeader h2 { font-size:22px; }
 }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none !important; transition:none !important; } }
+
+/* Phase 4: weather probe, presence questionnaire and review quiz. */
+.surveyPanel { margin:16px 0; }
+.surveyPanel h4 { margin:0 0 6px; }
+.surveyItem { border:1px solid var(--line); border-radius:var(--radius-md); padding:12px 16px; margin:12px 0; background:var(--card); }
+.surveyItem legend { font-weight:600; font-size:14px; padding:0 4px; }
+.surveyChoice { display:flex; align-items:flex-start; gap:10px; padding:6px 4px; font-size:13px; cursor:pointer; }
+.surveyChoice input { margin-top:3px; flex:0 0 auto; }
+.surveyScale { display:flex; flex-wrap:wrap; gap:4px 12px; }
+.surveyScale .surveyChoice { flex:1 1 90px; }
+.reviewResult.correct { color:var(--ok); }
+.reviewResult.incorrect { color:var(--danger); }

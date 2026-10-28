@@ -9,6 +9,8 @@ const serviceConfig = loadServiceConfig(app.getAppPath());
 const services = createServiceClient(serviceConfig, { fetchImpl: (...args) => fetch(...args) });
 const security = require('./security.cjs');
 const vrContract = require('./vr-contract.cjs');
+const postAssessment = require('./post-assessment.cjs');
+const climateProbe = postAssessment.loadProbe(app.getAppPath());
 const { createVrBridge, adbReverse } = require('./vr-bridge.cjs');
 // WAH_VR_PORT exists for tests (0 = any free port); the headset build always uses 8787.
 const vrBridge = createVrBridge({ port: process.env.WAH_VR_PORT !== undefined ? Number(process.env.WAH_VR_PORT) : undefined });
@@ -87,7 +89,7 @@ app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) creat
 handle('read-json', async (_, relativePath) => {
   if (relativePath === 'data/config.json') return !app.isPackaged && process.env.WAH_AUDIO_DIAGNOSTICS === '1'
     ? { ...serviceConfig.rendererConfig, audioDiagnostics: true } : serviceConfig.rendererConfig;
-  if (!['data/question-bank.json', 'data/final-quiz-bank.json'].includes(relativePath)) throw new Error('Unsupported application data.');
+  if (!['data/question-bank.json', 'data/final-quiz-bank.json', 'data/climate-probe.json'].includes(relativePath)) throw new Error('Unsupported application data.');
   const p = path.join(app.getAppPath(), relativePath);
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 });
@@ -303,7 +305,9 @@ handle('save-debriefing-report', async (_, input) => {
     runPara('Interview Level', state.expertiseAfterInterview || 'Not completed'),
     runPara('Quiz Level', state.expertiseAfterQuiz || 'Not completed'),
     runPara('VR Expertise Level', normalizeReadinessLevel(state.vrExpertiseLevel) || 'Not rated'),
+    runPara('VR Result Validity', presenceText(state)),
     runPara('VR Report File', d.vrReportFileName || 'Not available'),
+    runPara('Weather Check', postAssessment.weatherCheckLine(climateProbe, state)?.replace('Weather check (module 5): ', '') || 'Not taken'),
     sectionPara('VR Report Summary'),
     p(d.vrSummary || 'No VR report summary generated.'),
     sectionPara('Debriefing Summary'),
@@ -318,6 +322,13 @@ handle('save-debriefing-report', async (_, input) => {
   }, await Packer.toBuffer(doc));
 });
 
+
+// Presence recomputed from the answers; the renderer's own result is never trusted for a document.
+function presenceText(state) {
+  const score = postAssessment.presenceScore(state.presence?.answers);
+  if (!score) return 'Presence not recorded';
+  return `${score.validity === 'inconclusive' ? 'Inconclusive (low presence)' : 'Valid'}: SUS mean ${score.mean} of 7, ${score.highCount} of 6 answers at 6 or 7`;
+}
 
 function normalizeReadinessLevel(value) {
   const text = String(value || '').toLowerCase();
@@ -363,6 +374,8 @@ handle('save-certificate', async (_, input) => {
   const target = security.savePath(result.filePath, app.getAppPath(), '.pdf');
   const data = { name: state.studentName, readiness, qualification: readinessMessage(readiness),
     date: state.debriefing.completedAt ? new Date(state.debriefing.completedAt).toLocaleDateString() : 'Not recorded (legacy session)' };
+  const weather = postAssessment.weatherCheckLine(climateProbe, state);
+  if (weather) data.weather = weather;
   const buffer = await require('./certificate-pdf.cjs').createCertificatePDF(data);
   fs.writeFileSync(target, buffer);
   return { canceled: false, filePath: target };

@@ -126,6 +126,9 @@ app.whenReady().then(async () => {
     await js("$('unlockVrAnalysis').click()");
     await js('analyzeVrReport()');
     check('real DOCX IPC import and fallback VR analysis', await js("state.vrCompleted && state.vrExpertiseLevel==='Intermediate'"));
+    check('presence questionnaire gates the debriefing', await js("$('continueDebriefing').disabled"));
+    await js("[5,5,5,5,5,5].forEach((v, i) => pickChoice('presence', i, v)); submitPresence()");
+    await wait("state.presence && !$('continueDebriefing').disabled");
     await js("$('continueDebriefing').click(); $('startDebrief').click()");
     for (let i = 0; i < 4; i++) await js("$('debriefAnswerBox').value='Synthetic reflection'; submitDebriefingAnswer()");
     check('debrief fallback completes after four answers', await js('state.debriefingCompleted'));

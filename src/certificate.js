@@ -20,8 +20,10 @@
     const readiness = node('div', '', 'certificateReadinessBlock');
     readiness.append(node('p', 'Overall Readiness Classification'), node('div', data.readiness, 'readinessBadge', 'certOverallBadge'));
     root.append(readiness, node('p', data.qualification, 'certQualification'),
-      node('p', 'SmartChats · Interview · Quiz · VR · Debriefing', 'certActivities'),
-      node('p', `Completion date: ${data.date}`, 'certCompletionDate'),
+      node('p', 'SmartChats · Interview · Quiz · VR · Debriefing', 'certActivities'));
+    // Phase 4: weather probe before the VR x after the review quiz, only when the probe was taken.
+    if (data.weather) root.append(node('p', data.weather, 'certWeather', 'certWeatherCheck'));
+    root.append(node('p', `Completion date: ${data.date}`, 'certCompletionDate'),
       node('p', 'WORKATHEIGHTS / TRAINING EXPERIENCE RECORD', 'certRecord'));
   }
   window.wahCertificate = Object.freeze({ render });

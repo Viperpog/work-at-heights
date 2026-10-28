@@ -309,15 +309,56 @@ function reportDigest(log) {
   return lines.join('\n');
 }
 
-// What the renderer receives for an accepted report, by file or by WebSocket: the rule result and the digest, never the raw report.
+// Phase 4: what the learner did in the VR -> chapters of the review quiz (post-test). First matching events first, no repeats.
+// Initial map, to be calibrated with the professor. Topics are the chapter titles of data/final-quiz-bank.json.
+const REVIEW_TOPICS = Object.freeze({
+  '5.3': 'External Influences and Changing Conditions', '5.5': 'Restrictive Conditions', '5.6': 'Weather as a Possible Restrictive Condition',
+  '5.7': 'Suspension of Work', '5.9': 'Communication and Supervision', '5.12': 'Worker Guidance Using Only NR-35',
+  '6.7': 'Harness and Connection Requirements', '7.6': 'Staying Connected'
+});
+function reviewChaptersFor(log) {
+  const chapters = [];
+  const add = (chapter, event) => { if (!chapters.some(c => c.chapter === chapter)) chapters.push({ module: Number(chapter.split('.')[0]), chapter, topic: REVIEW_TOPICS[chapter], event }); };
+  if (log.completed === false || log.end_reason !== 'Results' || log.verdict === 'incomplete') return chapters;
+  const said = log.weather.said_vs_did !== undefined ? log.weather.said_vs_did : saidVsDid(log);
+  if (log.final_decision === 'continued_inspection_in_rain' || ['continued_inspection', 'photographed_before_pressure'].includes(log.supervisor_pressure.response) || log.weather.photo_during_rain) {
+    add('5.6', 'worked_in_rain'); add('5.7', 'worked_in_rain');
+  }
+  if (log.descent.during_rain || log.descent.premature) { add('5.7', 'descent_in_rain'); add('5.5', 'descent_in_rain'); }
+  if (said === 'inconsistent') add('5.12', 'said_vs_did_inconsistent');
+  if (log.stopped_after_intervention === true || log.safety_supervisor_interventions.length > 0) add('5.9', 'safety_intervention');
+  if (log.verdict === 'time_up') add('5.3', 'time_up');
+  if (log.director.critical_failures >= 1) add('5.7', 'critical_failure');
+  if (!log.ppe.all_correct) add('6.7', 'ppe_incorrect');
+  if (log.lifeline.connected_before_ascent === false) add('7.6', 'lifeline_not_connected');
+  return chapters;
+}
+
+// Phase 4: structured fields of the report for the debriefing (enums, numbers and booleans only, never device text).
+function debriefFacts(log) {
+  const config = log.scenario_config;
+  const said = log.weather.said_vs_did !== undefined ? log.weather.said_vs_did : saidVsDid(log);
+  return {
+    said_vs_did: said, declared_decision: log.weather.declared_decision, behavior_after_call: log.supervisor_pressure.response,
+    final_decision: log.final_decision, safety_classification: log.safety_classification, verdict: log.verdict,
+    critical_failures: log.director.critical_failures, descent_during_rain: log.descent.during_rain, premature_descent: log.descent.premature,
+    stopped_after_intervention: log.stopped_after_intervention, ppe_all_correct: log.ppe.all_correct,
+    lifeline_connected_before_ascent: log.lifeline.connected_before_ascent,
+    scenario_config: config ? { mode: config.mode, preset: config.preset, question_timeout_s: config.question_timeout_s, error_pause: config.error_pause, lightning_before_question: config.lightning_before_question } : null
+  };
+}
+
+// What the renderer receives for an accepted report, by file or by WebSocket: the rule result, the digest and structured fields, never the raw report.
 function importedReport({ log, bound, rating }) {
   return { kind: 'json', sessionId: log.session_id.toLowerCase(), bound, planId: log.plan ? log.plan.plan_id : null,
-    level: rating.level, rule: rating.rule, code: rating.code, reason: rating.reason, text: reportDigest(log) };
+    level: rating.level, rule: rating.rule, code: rating.code, reason: rating.reason, text: reportDigest(log),
+    facts: debriefFacts(log), reviewChapters: reviewChaptersFor(log) };
 }
 
 module.exports = {
   PLAN_SCHEMA, LOG_SCHEMA, MAX_MESSAGE_BYTES, TOPICS, LEVELS, MODES, PHASES, LEVEL_LABELS, PRESETS,
   validateSessionPlan, validateEventLog, validateScenarioConfig, validatePlanAck, validateReportAck, validateEnvelope,
   parseMessage, makeEnvelope, saidVsDid, scenarioConfigFor,
-  pseudonymFor, buildSessionPlan, vrLevelFor, acceptVrReport, judgeVrLog, parseVrReport, reportDigest, importedReport
+  pseudonymFor, buildSessionPlan, vrLevelFor, acceptVrReport, judgeVrLog, parseVrReport, reportDigest, importedReport,
+  REVIEW_TOPICS, reviewChaptersFor, debriefFacts
 };
