@@ -1,0 +1,24 @@
+{
+  "schema": "wah.session_plan",
+  "schema_version": "1.0",
+  "plan_id": "6b1e2f0a-3c4d-4e5f-8a9b-0c1d2e3f4a5b",
+  "created_at_utc": "2026-11-05T14:02:11Z",
+  "learner": { "pseudonym": "L-7f3a91", "language": "en" },
+  "assessment": {
+    "smartchats_level": "intermediate",
+    "interview_level": "basic",
+    "quiz_level": "basic",
+    "quiz_score_pct": 46
+  },
+  "vr": {
+    "mode": "training",
+    "level": "basic",
+    "training_id": "weather_hazards",
+    "phase": "pre_test",
+    "attempt": 1,
+    "weak_topics": [
+      { "module": 5, "chapter": "5.7", "topic": "Suspension of Work" },
+      { "module": 5, "chapter": "5.5", "topic": "Restrictive Conditions" }
+    ]
+  }
+}

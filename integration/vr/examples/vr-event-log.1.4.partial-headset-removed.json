@@ -1,0 +1,107 @@
+{
+	"schema": "safeheight.vr_event_log",
+	"schema_version": "1.4",
+	"session_id": "E2AD0ACD4C36F91606B5F7AA07C78C2A",
+	"generated_at_utc": "2026-10-11T08:04:09.842Z",
+	"completed": false,
+	"end_reason": "HeadsetRemoved",
+	"app":
+	{
+		"product": "SafeHeight Agentic Tutor",
+		"scenario": "facade_inspection_salvador",
+		"map": "Map_SalvadorTutorial",
+		"catalog": "DA_SalvadorTutorial_EN",
+		"platform": "Windows"
+	},
+	"learner_profile":
+	{
+		"level": "Intermediate",
+		"focus": "weather_hazard_perception",
+		"source": "fixed_in_xr"
+	},
+	"duration_s": 15.7,
+	"start":
+	{
+		"trigger": "training_menu",
+		"training_id": "weather_hazards",
+		"practice_started_at_s": null
+	},
+	"steps": [
+		{
+			"id": "Welcome",
+			"started_at_s": 9.6,
+			"ended_at_s": null,
+			"skipped_by_operator": false
+		}
+	],
+	"ppe":
+	{
+		"required": [
+			"Harness",
+			"Lanyard",
+			"Hard hat"
+		],
+		"equipped": [],
+		"missed": [
+			"Harness",
+			"Lanyard",
+			"Hard hat"
+		],
+		"wrong_item_attempts": 0,
+		"all_correct": false
+	},
+	"platform_check":
+	{
+		"entered_platform": false
+	},
+	"lifeline":
+	{
+		"connected_before_ascent": null
+	},
+	"inspection":
+	{
+		"photo_goal": 2,
+		"photos_sent": 0,
+		"item_types": [
+			"crack"
+		]
+	},
+	"weather":
+	{
+		"rain_started_at_s": null,
+		"rain_ended_at_s": null,
+		"stopped_photos": false,
+		"photo_during_rain": false,
+		"first_photo_during_rain_at_s": null,
+		"photo_after_rain": false,
+		"declared_decision": null,
+		"declared_at_s": null,
+		"answer_feedback": null
+	},
+	"supervisor_pressure":
+	{
+		"speaker": "site_foreman",
+		"played": false,
+		"at_s": null,
+		"line": "We are running behind. Can you finish this inspection before the rain gets stronger?",
+		"response": "not_reached"
+	},
+	"descent":
+	{
+		"started_at_s": null,
+		"reached_ground_at_s": null,
+		"during_rain": false,
+		"premature": false
+	},
+	"safety_supervisor_interventions": [],
+	"stopped_after_intervention": null,
+	"pedagogical_pauses": [],
+	"director":
+	{
+		"incident_keys": [],
+		"critical_failures": 0
+	},
+	"final_decision": "incomplete",
+	"safety_classification": "incomplete",
+	"verdict": "incomplete"
+}

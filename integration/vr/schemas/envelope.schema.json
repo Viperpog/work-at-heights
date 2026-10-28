@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/agsiqueira/work-at-heights/integration/vr/schemas/envelope.schema.json",
+  "title": "WAH <-> VR WebSocket envelope (version 1)",
+  "description": "The envelope the VR's QuestSupervisor plugin already speaks, so the VR side reuses its client. WAH serves ws://127.0.0.1:8787/ws; the Quest reaches it through `adb reverse tcp:8787 tcp:8787`. Order: VR hello -> WAH publish wah.session_plan -> VR publish vr.plan_ack -> (VR publish experience.lifecycle, optional) -> VR publish safeheight.vr_event_log -> WAH publish wah.report_ack. Unknown topics are ignored.",
+  "type": "object",
+  "required": ["version", "id", "type", "clientId", "payload"],
+  "properties": {
+    "version": { "const": 1 },
+    "id": { "type": "string", "minLength": 1, "maxLength": 64, "description": "Message id (UUID)." },
+    "type": { "enum": ["hello", "publish", "error"] },
+    "topic": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "clientId": { "type": "string", "minLength": 1, "maxLength": 128, "description": "The VR device id, or \"wah\" for messages from the desktop app." },
+    "correlationId": { "type": "string", "minLength": 1, "maxLength": 64, "description": "On acks: the id of the message being acknowledged." },
+    "requiresAck": { "type": "boolean" },
+    "collectedAt": { "type": "string" },
+    "sessionTimeMs": { "type": "number" },
+    "payload": { "type": "object" }
+  },
+  "allOf": [
+    { "if": { "properties": { "type": { "const": "publish" } } }, "then": { "required": ["topic"] } },
+    {
+      "if": { "properties": { "type": { "const": "hello" } } },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["clientId", "role", "capabilities"],
+            "properties": {
+              "clientId": { "type": "string", "minLength": 1, "maxLength": 128 },
+              "role": { "const": "unreal" },
+              "capabilities": { "type": "array", "maxItems": 64, "items": { "type": "string", "minLength": 1, "maxLength": 200 }, "description": "The bridge build announces \"wah.session_plan@1\" and \"safeheight.vr_event_log@1.5\"." }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "required": ["topic"], "properties": { "type": { "const": "publish" }, "topic": { "const": "wah.session_plan" } } },
+      "then": { "properties": { "payload": { "$ref": "session-plan.schema.json" } } }
+    },
+    {
+      "if": { "required": ["topic"], "properties": { "type": { "const": "publish" }, "topic": { "const": "safeheight.vr_event_log" } } },
+      "then": { "properties": { "payload": { "$ref": "vr-event-log.schema.json" } } }
+    },
+    {
+      "if": { "required": ["topic"], "properties": { "type": { "const": "publish" }, "topic": { "const": "vr.plan_ack" } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/plan_ack" } } }
+    },
+    {
+      "if": { "required": ["topic"], "properties": { "type": { "const": "publish" }, "topic": { "const": "wah.report_ack" } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/report_ack" } } }
+    }
+  ],
+  "$defs": {
+    "plan_ack": {
+      "type": "object",
+      "required": ["plan_id", "accepted", "applied_config"],
+      "properties": {
+        "plan_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "accepted": { "type": "boolean" },
+        "applied_config": { "oneOf": [{ "type": "null" }, { "$ref": "vr-event-log.schema.json#/$defs/scenario_config" }] },
+        "error": { "type": "string", "minLength": 1, "maxLength": 500 }
+      },
+      "if": { "properties": { "accepted": { "const": true } } },
+      "then": { "properties": { "applied_config": { "type": "object" } } },
+      "else": { "required": ["error"], "properties": { "applied_config": { "type": "null" } } }
+    },
+    "report_ack": {
+      "type": "object",
+      "required": ["session_id", "stored"],
+      "properties": {
+        "session_id": { "type": ["string", "null"], "pattern": "^[0-9A-Fa-f]{32}$" },
+        "stored": { "type": "boolean" },
+        "error": { "type": "string", "minLength": 1, "maxLength": 500 }
+      },
+      "if": { "properties": { "stored": { "const": false } } },
+      "then": { "required": ["error"] }
+    }
+  }
+}

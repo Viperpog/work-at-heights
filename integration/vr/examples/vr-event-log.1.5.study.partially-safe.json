@@ -1,0 +1,185 @@
+{
+  "schema": "safeheight.vr_event_log",
+  "schema_version": "1.5",
+  "session_id": "A41E7D2C0B9F4E58A3C6D1B2E7F09C34",
+  "generated_at_utc": "2026-11-05T15:27:02.118Z",
+  "completed": true,
+  "end_reason": "Results",
+  "app": {
+    "product": "SafeHeight Agentic Tutor",
+    "scenario": "facade_inspection_salvador",
+    "map": "Map_SalvadorTutorial",
+    "catalog": "DA_SalvadorTutorial_EN",
+    "platform": "Windows"
+  },
+  "learner_profile": {
+    "level": "Expert",
+    "focus": "weather_hazard_perception",
+    "source": "wah_plan"
+  },
+  "duration_s": 225.9,
+  "start": {
+    "trigger": "training_menu",
+    "training_id": "weather_hazards",
+    "practice_started_at_s": 0
+  },
+  "steps": [
+    {
+      "id": "Welcome",
+      "started_at_s": 0,
+      "ended_at_s": 13.2,
+      "skipped_by_operator": false
+    },
+    {
+      "id": "Equipment",
+      "started_at_s": 13.2,
+      "ended_at_s": 14.2,
+      "skipped_by_operator": false
+    },
+    {
+      "id": "Platform",
+      "started_at_s": 14.2,
+      "ended_at_s": 24.2,
+      "skipped_by_operator": false
+    },
+    {
+      "id": "Lanyard",
+      "started_at_s": 24.2,
+      "ended_at_s": 30.2,
+      "skipped_by_operator": false
+    },
+    {
+      "id": "Rule",
+      "started_at_s": 30.2,
+      "ended_at_s": 40.4,
+      "skipped_by_operator": false
+    },
+    {
+      "id": "Ascent",
+      "started_at_s": 40.4,
+      "ended_at_s": 74.2,
+      "skipped_by_operator": false
+    },
+    {
+      "id": "Photo",
+      "started_at_s": 74.2,
+      "ended_at_s": 95.7,
+      "skipped_by_operator": false
+    },
+    {
+      "id": "Rain",
+      "started_at_s": 95.7,
+      "ended_at_s": 165.4,
+      "skipped_by_operator": false
+    },
+    {
+      "id": "Descent",
+      "started_at_s": 165.4,
+      "ended_at_s": 225.9,
+      "skipped_by_operator": false
+    },
+    {
+      "id": "Results",
+      "started_at_s": 225.9,
+      "ended_at_s": 225.9,
+      "skipped_by_operator": false
+    }
+  ],
+  "ppe": {
+    "required": [
+      "Harness",
+      "Lanyard",
+      "Hard hat"
+    ],
+    "equipped": [
+      "Harness",
+      "Lanyard",
+      "Hard hat"
+    ],
+    "missed": [],
+    "wrong_item_attempts": 0,
+    "all_correct": true
+  },
+  "platform_check": {
+    "entered_platform": true
+  },
+  "lifeline": {
+    "connected_before_ascent": true
+  },
+  "inspection": {
+    "photo_goal": 2,
+    "photos_sent": 1,
+    "item_types": [
+      "crack"
+    ]
+  },
+  "weather": {
+    "rain_started_at_s": 95.7,
+    "rain_ended_at_s": 160.2,
+    "stopped_photos": true,
+    "photo_during_rain": false,
+    "first_photo_during_rain_at_s": null,
+    "photo_after_rain": false,
+    "declared_decision": "stop_and_wait",
+    "declared_at_s": 119.7,
+    "answer_feedback": false,
+    "said_vs_did": "inconsistent"
+  },
+  "supervisor_pressure": {
+    "speaker": "site_foreman",
+    "played": true,
+    "at_s": 105.2,
+    "line": "We are running behind. Can you finish this inspection before the rain gets stronger?",
+    "response": "descended_during_rain"
+  },
+  "descent": {
+    "started_at_s": 143.4,
+    "reached_ground_at_s": 225.7,
+    "during_rain": true,
+    "premature": false
+  },
+  "safety_supervisor_interventions": [
+    {
+      "type": "descent",
+      "at_s": 143.4,
+      "stopped_after_intervention": true,
+      "pause_s": 6.5
+    }
+  ],
+  "stopped_after_intervention": true,
+  "pedagogical_pauses": [
+    {
+      "type": "question",
+      "at_s": 112.2,
+      "duration_s": 8.2
+    },
+    {
+      "type": "error_descent",
+      "at_s": 143.4,
+      "duration_s": 6.5
+    }
+  ],
+  "director": {
+    "incident_keys": [
+      "DescentDuringRain"
+    ],
+    "critical_failures": 1
+  },
+  "final_decision": "descended_during_rain",
+  "safety_classification": "partially_safe",
+  "verdict": "review_needed",
+  "plan": {
+    "plan_id": "0c9d8e7f-6a5b-4c3d-9e2f-1a0b9c8d7e6f",
+    "pseudonym": "L-2be04c",
+    "phase": "pre_test",
+    "attempt": 1
+  },
+  "scenario_config": {
+    "mode": "study",
+    "preset": "intermediate",
+    "question_timeout_s": 25,
+    "error_pause": true,
+    "lightning_before_question": false,
+    "overrides_applied": []
+  }
+}

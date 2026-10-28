@@ -1,0 +1,171 @@
+{
+  "schema": "safeheight.vr_event_log",
+  "schema_version": "1.5",
+  "session_id": "5F0C2B7E9A1D4C3B8E6F0A2D4B6C8E1F",
+  "generated_at_utc": "2026-11-05T14:09:37.512Z",
+  "completed": true,
+  "end_reason": "Results",
+  "app": {
+    "product": "SafeHeight Agentic Tutor",
+    "scenario": "facade_inspection_salvador",
+    "map": "Map_SalvadorTutorial",
+    "catalog": "DA_SalvadorTutorial_EN",
+    "platform": "Android"
+  },
+  "learner_profile": {
+    "level": "Basic",
+    "focus": "weather_hazard_perception",
+    "source": "wah_plan"
+  },
+  "duration_s": 238.9,
+  "start": {
+    "trigger": "training_menu",
+    "training_id": "weather_hazards",
+    "practice_started_at_s": 7
+  },
+  "steps": [
+    {
+      "id": "Welcome",
+      "started_at_s": 7,
+      "ended_at_s": 27.3,
+      "skipped_by_operator": false
+    },
+    {
+      "id": "Equipment",
+      "started_at_s": 27.3,
+      "ended_at_s": 33,
+      "skipped_by_operator": false
+    },
+    {
+      "id": "Platform",
+      "started_at_s": 33,
+      "ended_at_s": 35.8,
+      "skipped_by_operator": false
+    },
+    {
+      "id": "Lanyard",
+      "started_at_s": 35.8,
+      "ended_at_s": 50,
+      "skipped_by_operator": false
+    },
+    {
+      "id": "Rule",
+      "started_at_s": 50,
+      "ended_at_s": 51.3,
+      "skipped_by_operator": false
+    },
+    {
+      "id": "Ascent",
+      "started_at_s": 51.3,
+      "ended_at_s": 80.4,
+      "skipped_by_operator": false
+    },
+    {
+      "id": "Photo",
+      "started_at_s": 80.4,
+      "ended_at_s": 94.5,
+      "skipped_by_operator": false
+    },
+    {
+      "id": "Rain",
+      "started_at_s": 94.5,
+      "ended_at_s": 161.2,
+      "skipped_by_operator": false
+    },
+    {
+      "id": "Descent",
+      "started_at_s": 161.2,
+      "ended_at_s": 238.9,
+      "skipped_by_operator": false
+    },
+    {
+      "id": "Results",
+      "started_at_s": 238.9,
+      "ended_at_s": 238.9,
+      "skipped_by_operator": false
+    }
+  ],
+  "ppe": {
+    "required": [
+      "Harness",
+      "Lanyard",
+      "Hard hat"
+    ],
+    "equipped": [
+      "Harness",
+      "Lanyard",
+      "Hard hat"
+    ],
+    "missed": [],
+    "wrong_item_attempts": 0,
+    "all_correct": true
+  },
+  "platform_check": {
+    "entered_platform": true
+  },
+  "lifeline": {
+    "connected_before_ascent": true
+  },
+  "inspection": {
+    "photo_goal": 2,
+    "photos_sent": 1,
+    "item_types": [
+      "crack"
+    ]
+  },
+  "weather": {
+    "rain_started_at_s": 94.5,
+    "rain_ended_at_s": 156.1,
+    "stopped_photos": true,
+    "photo_during_rain": false,
+    "first_photo_during_rain_at_s": null,
+    "photo_after_rain": false,
+    "declared_decision": "stop_and_wait",
+    "declared_at_s": 122,
+    "answer_feedback": false,
+    "said_vs_did": "consistent"
+  },
+  "supervisor_pressure": {
+    "speaker": "site_foreman",
+    "played": true,
+    "at_s": 103.9,
+    "line": "We are running behind. Can you finish this inspection before the rain gets stronger?",
+    "response": "stopped_and_waited"
+  },
+  "descent": {
+    "started_at_s": 168.3,
+    "reached_ground_at_s": 238.8,
+    "during_rain": false,
+    "premature": false
+  },
+  "safety_supervisor_interventions": [],
+  "stopped_after_intervention": null,
+  "pedagogical_pauses": [
+    {
+      "type": "question",
+      "at_s": 111,
+      "duration_s": 11.8
+    }
+  ],
+  "director": {
+    "incident_keys": [],
+    "critical_failures": 0
+  },
+  "final_decision": "stopped_waited_descended",
+  "safety_classification": "safe",
+  "verdict": "safe_decisions",
+  "plan": {
+    "plan_id": "6b1e2f0a-3c4d-4e5f-8a9b-0c1d2e3f4a5b",
+    "pseudonym": "L-7f3a91",
+    "phase": "pre_test",
+    "attempt": 1
+  },
+  "scenario_config": {
+    "mode": "training",
+    "preset": "basic",
+    "question_timeout_s": 35,
+    "error_pause": true,
+    "lightning_before_question": true,
+    "overrides_applied": []
+  }
+}

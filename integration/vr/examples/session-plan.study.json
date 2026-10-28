@@ -1,0 +1,21 @@
+{
+  "schema": "wah.session_plan",
+  "schema_version": "1.0",
+  "plan_id": "0c9d8e7f-6a5b-4c3d-9e2f-1a0b9c8d7e6f",
+  "created_at_utc": "2026-11-05T15:20:44Z",
+  "learner": { "pseudonym": "L-2be04c", "language": "en" },
+  "assessment": {
+    "smartchats_level": "expert",
+    "interview_level": "intermediate",
+    "quiz_level": "expert",
+    "quiz_score_pct": 91
+  },
+  "vr": {
+    "mode": "study",
+    "level": "expert",
+    "training_id": "weather_hazards",
+    "phase": "pre_test",
+    "attempt": 1,
+    "weak_topics": []
+  }
+}
