@@ -7,7 +7,7 @@ WAH and the SafeHeight VR (Meta Quest 3, Unreal Engine 5.7) exchange **two JSON 
 | WAH → VR | `wah.session_plan` 1.0 | [`schemas/session-plan.schema.json`](schemas/session-plan.schema.json) | Learner levels from SmartChats, interview and quiz; the VR picks the weather scenario preset from it |
 | VR → WAH | `safeheight.vr_event_log` 1.5 | [`schemas/vr-event-log.schema.json`](schemas/vr-event-log.schema.json) | What the learner did in the storm, plus the scenario actually applied |
 
-This replaces the "you may now experience the VR" message and the manual `.docx` import in step 5. Phase 1 added the contract; phase 2 (file exchange) is used by the app, see [Phase 2: exchange by file](#phase-2-exchange-by-file). The WebSocket server is phase 3.
+This replaces the "you may now experience the VR" message and the manual `.docx` import in step 5. Phase 1 added the contract; phase 2 (file exchange) stays as the fallback, see [Phase 2: exchange by file](#phase-2-exchange-by-file); phase 3 is the WebSocket server in the app, see [Phase 3: WebSocket](#phase-3-websocket).
 
 ## Files
 
@@ -74,6 +74,19 @@ Initial proposal, to be calibrated in the pilot.
 - An incomplete JSON session leaves step 5 open; the only way past it without a new session is the `.docx` fallback.
 - 1.4 reports are accepted without plan binding. Reject them once the bridge build (1.5) is the only one in use.
 
+## Phase 3: WebSocket
+
+`src/vr-bridge.cjs` runs the server of the [message flow](#message-flow) in the Electron main process. The screen still has `connect-src 'none'`: it talks to the main process over IPC only.
+
+1. **Connect Quest** (step 5) builds the plan if needed (`ensureVrPlan`), hands it to the main process with the session ids already imported (`vr-bridge-connect`), starts the server on `127.0.0.1:8787/ws` (only on this first click) and runs `adb devices` + `adb -s <serial> reverse tcp:8787 tcp:8787`. adb is looked up in `WAH_ADB`, `ADB`, `ANDROID_HOME`/`ANDROID_SDK_ROOT`/`%LOCALAPPDATA%\Android\Sdk` `platform-tools`, then `PATH`. Missing adb, no headset or an unauthorized headset each give their own message; the server keeps running (adb can be run by hand) and the file buttons still work.
+2. **Plan.** Sent on every `hello` until a `vr.plan_ack` answers one of the copies sent (`correlationId`) for the same `plan_id`; a plan set while the headset is already connected goes out at once, and a new plan (retake, another learner) replaces the old one. A bound report also counts as delivery (the ack may have been lost). An incomplete session (rule 2) puts the same plan back out for the next session.
+3. **Report.** The envelope and the report are validated by `parseMessage`; the plan and duplicate checks are the same as the file import (`judgeVrLog`). Accepted: stored in memory, `wah.report_ack stored:true`. Repeated `session_id` (a resend after a lost ack, or a report already imported by file): `stored:true` again, kept once. Another plan, no plan, or invalid: `stored:false` + `error` (field path only), nothing kept.
+4. **Screen.** The main process sends `vr-bridge-event` notices (`status`, or `report` = something is waiting); the screen pulls the results with `vr-bridge-take-reports` (same shape as a JSON file import, plus `source: 'websocket'` and `planId`) once the learner has a plan, skips a result bound to a plan it no longer holds, and imports it with the same rule table. Step 5 shows connection, plan and last report status.
+
+`test/vr-websocket.test.cjs` runs `mock-vr.cjs` against the real server: full cycle, plan resent per hello, connection cut before the plan ack and before the report ack (through a proxy), duplicates, other plan, invalid report, incomplete session, port in use, adb messages, and the IPC path of the main process.
+
+**Pending for the headset test:** the real `adb reverse` with the Quest 3 on USB; the VR bridge build's reconnect timing; and whether `hzdb`'s own adb conflicts with the one WAH finds (if so, point `WAH_ADB` to the same adb).
+
 ## Running the simulators
 
 ```bash
@@ -85,7 +98,9 @@ npm run vr:mock-vr
 - `mock-vr`: `--url <ws url>` (default `ws://127.0.0.1:8787/ws`), `--report <file>` as the base report (default the real Quest run below).
 - A real headset against `mock-wah`: `adb reverse tcp:8787 tcp:8787`, then start the VR bridge build.
 
-`ws` is a devDependency for the simulators; it moves to `dependencies` when the server enters the main process (phase 3).
+- The app itself against `mock-vr`: start WAH, reach step 5, press **Connect Quest** (the adb message is expected without a headset), then `npm run vr:mock-vr`.
+
+`ws` is in `dependencies` since phase 3 (the server runs in the main process).
 
 ## Examples
 

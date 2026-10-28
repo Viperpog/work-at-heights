@@ -269,9 +269,14 @@ function vrLevelFor(log) {
 }
 
 // Rejects what does not belong to this learner's session. 1.4 reports carry no plan, so they are accepted unbound (`bound: false`); 1.5+ must answer the plan WAH issued.
-function acceptVrReport(raw, { planId = null, seenSessionIds = [] } = {}) {
+function acceptVrReport(raw, context = {}) {
   let log;
   try { log = parseVrReport(raw); } catch (error) { return { accepted: false, code: 'invalid', message: error.message }; }
+  return judgeVrLog(log, context);
+}
+
+// Same checks for a report that is already validated (the WebSocket path parses it with the envelope).
+function judgeVrLog(log, { planId = null, seenSessionIds = [] } = {}) {
   const bound = log.plan !== undefined;
   if (bound && (log.plan === null || log.plan.plan_id !== planId)) return { accepted: false, code: 'other_plan', message: 'This report answers a different VR session plan. Save the plan again and run a new VR session.' };
   if (seenSessionIds.some(id => String(id).toLowerCase() === log.session_id.toLowerCase())) return { accepted: false, code: 'duplicate_session', message: 'This VR report was already imported.' };
@@ -304,9 +309,15 @@ function reportDigest(log) {
   return lines.join('\n');
 }
 
+// What the renderer receives for an accepted report, by file or by WebSocket: the rule result and the digest, never the raw report.
+function importedReport({ log, bound, rating }) {
+  return { kind: 'json', sessionId: log.session_id.toLowerCase(), bound, planId: log.plan ? log.plan.plan_id : null,
+    level: rating.level, rule: rating.rule, code: rating.code, reason: rating.reason, text: reportDigest(log) };
+}
+
 module.exports = {
   PLAN_SCHEMA, LOG_SCHEMA, MAX_MESSAGE_BYTES, TOPICS, LEVELS, MODES, PHASES, LEVEL_LABELS, PRESETS,
   validateSessionPlan, validateEventLog, validateScenarioConfig, validatePlanAck, validateReportAck, validateEnvelope,
   parseMessage, makeEnvelope, saidVsDid, scenarioConfigFor,
-  pseudonymFor, buildSessionPlan, vrLevelFor, acceptVrReport, parseVrReport, reportDigest
+  pseudonymFor, buildSessionPlan, vrLevelFor, acceptVrReport, judgeVrLog, parseVrReport, reportDigest, importedReport
 };

@@ -354,7 +354,7 @@
             <h2>Reflect on your virtual experience</h2>
             <p>Import the report from the separate VR experience to connect practice with your learning track.</p>
           </div>
-          <div class="vrJourney panel"><p class="eyebrow">Separate VR application → Word report → WAH analysis</p><ol><li><strong>Complete the VR experience</strong><span>Use the separately distributed VR training application.</span></li><li><strong>Export the VR report</strong><span>Save the session plan first and copy it to the headset; the VR system then generates a .json (or .docx) report.</span></li><li><strong>Import it into WAH</strong><span>WAH reads and summarizes the report for your debriefing.</span></li></ol><p>This stage does not run the VR simulation. It reviews evidence from the virtual reality experience.</p></div>
+          <div class="vrJourney panel"><p class="eyebrow">Quest on USB → VR session → WAH analysis</p><ol><li><strong>Connect the Quest</strong><span>Plug the headset into this computer and press Connect Quest. WAH sends your session plan to the headset.</span></li><li><strong>Complete the VR experience</strong><span>Start the SafeHeight VR application on the headset. Its report comes back to WAH automatically.</span></li><li><strong>Without a connection</strong><span>Save the session plan and copy it to the headset, then upload the .json (or .docx) report it generates.</span></li></ol><p>This stage does not run the VR simulation. It reviews evidence from the virtual reality experience.</p></div>
           <div class="vrAnalysisGrid"><div class="panel uploadPanel analysisPanel">
             <div class="analysisHeader">
               <span class="analysisIcon" aria-hidden="true">DOCX</span>
@@ -364,9 +364,11 @@
               </div>
             </div>
             <div class="analysisImport">
+              <button id="connectQuest" class="primary">Connect Quest</button>
               <button id="saveVrPlan" class="secondary">Save VR Session Plan (session_plan.json)</button>
-              <button id="uploadVrReport" class="primary">Upload VR Experience Report (.json or .docx)</button>
+              <button id="uploadVrReport" class="secondary">Upload VR Experience Report (.json or .docx)</button>
             </div>
+            <div id="vrBridgeStatus" class="panel muted resultPanel" aria-live="polite">Quest not connected.</div>
             <div id="vrReportStatus" class="panel muted resultPanel analysisResult">No VR report uploaded.</div>
             <div class="analysisActions">
               <button id="continueDebriefing" class="primary" disabled>Continue to Debriefing</button>

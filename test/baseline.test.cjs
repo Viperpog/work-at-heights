@@ -202,13 +202,15 @@ test('preload API routes each exposed operation to a registered main handler', (
   const main = mainProcess();
   let api;
   const calls = [];
+  const listeners = [];
   vm.runInNewContext(fs.readFileSync(path.join(root, 'src/preload.js'), 'utf8'), {
     require: () => ({ contextBridge: { exposeInMainWorld: (name, value) => { assert.equal(name, 'appApi'); api = value; } },
-      ipcRenderer: { invoke: (...args) => calls.push(args) } })
+      ipcRenderer: { invoke: (...args) => calls.push(args), on: channel => listeners.push(channel) } })
   });
   for (const fn of Object.values(api)) fn({ synthetic: true });
-  assert.equal(calls.length, 13);
+  assert.equal(calls.length, 16);
   for (const [channel] of calls) assert.ok(main.handlers.has(channel), channel);
+  assert.deepEqual(listeners, ['vr-bridge-event']); // the only main -> renderer channel
 });
 
 test('real DOCX libraries export unchanged reports and import VR text; canceled PDF save remains canceled', async () => {

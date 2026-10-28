@@ -9,6 +9,9 @@ const serviceConfig = loadServiceConfig(app.getAppPath());
 const services = createServiceClient(serviceConfig, { fetchImpl: (...args) => fetch(...args) });
 const security = require('./security.cjs');
 const vrContract = require('./vr-contract.cjs');
+const { createVrBridge, adbReverse } = require('./vr-bridge.cjs');
+// WAH_VR_PORT exists for tests (0 = any free port); the headset build always uses 8787.
+const vrBridge = createVrBridge({ port: process.env.WAH_VR_PORT !== undefined ? Number(process.env.WAH_VR_PORT) : undefined });
 const documentURL = security.pathToFileURL(path.join(__dirname, 'index.html')).href;
 const trustedWindows = new Set();
 const interviewBank = JSON.parse(fs.readFileSync(path.join(app.getAppPath(), 'data/question-bank.json'), 'utf8'));
@@ -18,10 +21,18 @@ function handle(channel, handler) {
   ipcMain.handle(channel, async (event, ...args) => {
     if (!security.trustedSender(event, trustedWindows, documentURL)) throw new Error('Untrusted IPC sender.');
     // select-vr-report takes an optional { planId, seenSessionIds } (validated by security.vrImportContext).
-    if (!(channel === 'save-ebook' ? [0] : channel === 'select-vr-report' ? [0, 1] : [1]).includes(args.length)) throw new Error('Invalid IPC arguments.');
+    if (!(NO_ARGUMENTS.includes(channel) ? [0] : channel === 'select-vr-report' ? [0, 1] : [1]).includes(args.length)) throw new Error('Invalid IPC arguments.');
     return handler(event, ...args);
   });
 }
+const NO_ARGUMENTS = ['save-ebook', 'vr-bridge-status', 'vr-bridge-take-reports'];
+
+// Main -> renderer notices of the VR bridge: status changes and "a report is waiting". Reports themselves are pulled with vr-bridge-take-reports.
+function notifyRenderers(payload) {
+  for (const contents of trustedWindows) if (!contents.isDestroyed()) contents.send('vr-bridge-event', payload);
+}
+vrBridge.events.on('status', status => notifyRenderers({ type: 'status', status }));
+vrBridge.events.on('report', () => notifyRenderers({ type: 'report' }));
 
 async function saveDocument(options, buffer) {
   const { canceled, filePath } = await dialog.showSaveDialog(options);
@@ -70,6 +81,7 @@ function createWindow() {
 
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('will-quit', () => { vrBridge.stop(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
 handle('read-json', async (_, relativePath) => {
@@ -124,6 +136,19 @@ handle('save-session-plan', async (_, plan) => {
   fs.writeFileSync(target, JSON.stringify(plan, null, 2) + '\n');
   return { canceled: false, filePath: target };
 });
+
+// Phase 3: the plan goes to the headset over WebSocket. The server starts on the first "Connect Quest" and stays on loopback;
+// adb failures are reported but do not stop the server (the operator can run adb reverse by hand, or use the file fallback).
+handle('vr-bridge-connect', async (_, input) => {
+  const { plan, seenSessionIds } = security.vrBridgeInput(input);
+  vrBridge.setPlan(plan, seenSessionIds);
+  try { await vrBridge.start(); }
+  catch (error) { return { status: vrBridge.status(), server: { ok: false, message: error.message }, adb: null }; }
+  const adb = await adbReverse({ port: vrBridge.status().port });
+  return { status: vrBridge.status(), server: { ok: true }, adb };
+});
+handle('vr-bridge-status', async () => vrBridge.status());
+handle('vr-bridge-take-reports', async () => vrBridge.takeReports());
 
 function p(text, opts = {}) {
   return new Paragraph({

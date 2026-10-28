@@ -55,8 +55,9 @@ function mainProcess(fetchImpl = () => { throw new Error('Unexpected network req
   const handlers = new Map();
   const rawHandlers = new Map();
   const events = new Map();
+  const sent = [];
   const contents = {
-    isDestroyed: () => false,
+    isDestroyed: () => false, send: (channel, payload) => sent.push([channel, payload]),
     getURL: () => require('node:url').pathToFileURL(path.join(root, 'src/index.html')).href,
     on: (name, fn) => events.set(name, fn), once: (name, fn) => events.set(name, fn),
     setWindowOpenHandler: fn => events.set('window-open', fn),
@@ -82,7 +83,7 @@ function mainProcess(fetchImpl = () => { throw new Error('Unexpected network req
     __dirname: path.join(root, 'src'), process, console, fetch: fetchImpl
   });
   vm.runInContext(fs.readFileSync(path.join(root, 'src/main.js'), 'utf8'), context);
-  return { handlers, rawHandlers, dialog, events, event, contents, run: code => vm.runInContext(code, context) };
+  return { handlers, rawHandlers, dialog, events, event, contents, sent, run: code => vm.runInContext(code, context) };
 }
 
 function completedState(smartLevel = 'Basic') {

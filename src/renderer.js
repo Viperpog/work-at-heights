@@ -1996,6 +1996,66 @@ function ensureVrPlan() {
   return vrPlanPending;
 }
 
+// Phase 3: the plan goes to the headset over the main process's WebSocket server (127.0.0.1:8787 + adb reverse).
+// The renderer never opens a socket; it gets status notices and pulls validated results over IPC. The file buttons stay as the fallback.
+async function connectQuest() {
+  let plan;
+  try { plan = await ensureVrPlan(); }
+  catch (_) { return showInfo('The VR session plan could not be created. Finish the quiz first.', 'Unable to connect the Quest'); }
+  let result;
+  try { result = await window.appApi.vrBridgeConnect({ plan, seenSessionIds: state.vrSessionIds }); }
+  catch (_) { return showInfo('The VR connection could not be started. Use Save VR Session Plan and upload the report instead.', 'Unable to connect the Quest'); }
+  renderBridgeStatus(result.status);
+  receiveBridgeReports();
+  if (!result.server.ok) return showInfo(`${result.server.message} Use Save VR Session Plan and upload the report instead.`, 'VR connection unavailable');
+  if (!result.adb.ok) return showInfo(result.adb.message, 'Quest not connected');
+}
+
+const bridgePlanText = {
+  waiting: 'Session plan ready, waiting for the headset.',
+  sent: 'Session plan sent, waiting for the headset to confirm.',
+  accepted: 'Session plan accepted by the headset.',
+  rejected: 'The headset rejected the session plan and will run its default scenario.',
+  used: 'Session plan used in a VR session.'
+};
+function renderBridgeStatus(status) {
+  const root = $('vrBridgeStatus');
+  if (!root || !status) return;
+  root.replaceChildren();
+  if (!status.listening) { root.textContent = 'Quest not connected.'; return; }
+  textParagraph(root, 'Connection:', status.connected
+    ? `Quest connected${status.clientId ? ` (${String(status.clientId).slice(0, 64)})` : ''}.`
+    : `Waiting for the Quest on ${status.host}:${status.port}.`);
+  if (status.plan) textParagraph(root, 'Plan:', bridgePlanText[status.plan.state] || 'Session plan ready.');
+  if (status.lastReport) textParagraph(root, 'Report:', status.lastReport.stored ? 'VR report received.' : `VR report refused: ${status.lastReport.error}`);
+}
+
+// Results are imported one at a time; a report for a plan this learner no longer holds (stale server plan) or already imported is skipped.
+// Nothing is pulled before this learner has a plan (e.g. the saved session is not restored yet): the reports wait in the main process.
+let bridgeQueue = Promise.resolve();
+function receiveBridgeReports() {
+  bridgeQueue = bridgeQueue.then(async () => {
+    if (!state.vrPlan) return;
+    const results = await window.appApi.vrBridgeTakeReports();
+    for (const result of Array.isArray(results) ? results : []) {
+      if (result.bound && (!state.vrPlan || result.planId !== state.vrPlan.plan_id)) continue;
+      if (state.vrSessionIds.includes(result.sessionId)) continue;
+      await importVrResult(result);
+    }
+  }).catch(() => {});
+  return bridgeQueue;
+}
+
+function listenToVrBridge() {
+  if (!window.appApi.onVrBridgeEvent) return;
+  window.appApi.onVrBridgeEvent(event => {
+    if (event && event.type === 'status') renderBridgeStatus(event.status);
+    if (event && event.type === 'report') receiveBridgeReports();
+  });
+  window.appApi.vrBridgeStatus().then(renderBridgeStatus).catch(() => {});
+  receiveBridgeReports();
+}
+
 function saveVrPlan() {
   return handleDocumentSave(async () => window.appApi.saveSessionPlan(await ensureVrPlan()),
     r => showInfo(`VR session plan saved to ${r.filePath}. Push it to the headset as session_plan.json before the VR session.`, 'VR session plan saved'),
@@ -2115,6 +2175,11 @@ async function analyzeVrReport() {
   catch (_) { await showInfo('Unable to read this report. Select a valid .json or .docx VR report within the supported size limits.', 'Unable to read VR report'); return; }
   if (result.canceled) return;
   if (result.rejected) { await showInfo(`${result.message} The report was not imported.`, 'VR report rejected'); return; }
+  await importVrResult(result);
+}
+
+// Shared by the file import and the WebSocket: `result` was validated and rated in the main process.
+async function importVrResult(result) {
   const rating = result.kind === 'json' ? { level: result.level, reason: result.reason } : null;
   if (rating) state.vrSessionIds = [...state.vrSessionIds, result.sessionId];
   if (rating && !rating.level) { renderVrStatus(false, { fileName: result.fileName, reason: rating.reason }); saveSession(); return; }
@@ -2399,6 +2464,8 @@ ${makeSegue(null, q)}`);
   $('unlockVrAnalysis').addEventListener('click', () => { unlock(5); setTab(5); saveSession(); });
   $('uploadVrReport').addEventListener('click', analyzeVrReport);
   $('saveVrPlan').addEventListener('click', saveVrPlan);
+  $('connectQuest').addEventListener('click', connectQuest);
+  listenToVrBridge();
   $('continueDebriefing').addEventListener('click', () => { unlock(6); setTab(6); saveSession(); });
   $('startDebrief').addEventListener('click', startDebriefing);
   $('submitDebriefAnswer').addEventListener('click', submitDebriefingAnswer);

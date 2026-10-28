@@ -126,9 +126,16 @@ function readVrJson(filePath, context = {}) {
   if (!stat.isFile() || stat.size > vrContract.MAX_MESSAGE_BYTES) reject('Invalid or oversized JSON report.');
   const verdict = vrContract.acceptVrReport(fs.readFileSync(filePath), context);
   if (!verdict.accepted) return { canceled: false, rejected: true, code: verdict.code, message: verdict.message };
-  const { log, bound, rating } = verdict;
-  return { canceled: false, kind: 'json', fileName: path.basename(filePath), sessionId: log.session_id.toLowerCase(), bound,
-    level: rating.level, rule: rating.rule, code: rating.code, reason: rating.reason, text: vrContract.reportDigest(log) };
+  return { canceled: false, fileName: path.basename(filePath), ...vrContract.importedReport(verdict) };
+}
+
+// Input of vr-bridge-connect: the plan the renderer holds (validated again here) and the session ids already imported.
+function vrBridgeInput(value) {
+  if (!object(value) || Object.keys(value).some(key => !['plan', 'seenSessionIds'].includes(key))) reject('Invalid IPC arguments.');
+  const { plan = null, seenSessionIds = [] } = value;
+  if (!Array.isArray(seenSessionIds) || seenSessionIds.length > 1000 || seenSessionIds.some(id => !text(id, 32))) reject('Invalid IPC arguments.');
+  if (plan !== null) vrContract.validateSessionPlan(plan);
+  return { plan, seenSessionIds };
 }
 
 function normalizeState(input) {
@@ -211,4 +218,4 @@ function validateEvidence(input, interviewBank, quizBank, certificate = false) {
   return state;
 }
 
-module.exports = { trustedSender, resourceAllowed, externalURL, savePath, validateZip, readReport, readVrJson, vrImportContext, validateEvidence, xmlText, pathToFileURL };
+module.exports = { trustedSender, resourceAllowed, externalURL, savePath, validateZip, readReport, readVrJson, vrImportContext, vrBridgeInput, validateEvidence, xmlText, pathToFileURL };
