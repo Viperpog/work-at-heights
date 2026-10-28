@@ -11,7 +11,7 @@
     "session_id": { "type": "string", "pattern": "^[0-9A-Fa-f]{32}$", "description": "Random id of the run; WAH de-duplicates resent reports by it." },
     "generated_at_utc": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$" },
     "completed": { "type": "boolean", "description": "true when the learner reached the results screen." },
-    "end_reason": { "enum": ["Results", "OperatorReset", "Timeout", "HeadsetRemoved"] },
+    "end_reason": { "enum": ["Results", "OperatorReset", "Timeout", "HeadsetRemoved", "EarlyReturn"], "description": "EarlyReturn: the learner came back down before the results screen (always incomplete)." },
     "app": { "type": "object" },
     "learner_profile": {
       "type": "object",

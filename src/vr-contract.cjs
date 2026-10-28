@@ -20,7 +20,7 @@ const PRESETS = Object.freeze({
 });
 const OVERRIDE_KEYS = ['preset', 'question_timeout_s', 'error_pause', 'lightning_before_question'];
 const LOG = Object.freeze({
-  endReasons: ['Results', 'OperatorReset', 'Timeout', 'HeadsetRemoved'],
+  endReasons: ['Results', 'OperatorReset', 'Timeout', 'HeadsetRemoved', 'EarlyReturn'],
   levels: Object.values(LEVEL_LABELS),
   sources: ['fixed_in_xr', 'wah_plan'],
   triggers: ['training_menu', 'tablet'],

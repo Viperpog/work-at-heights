@@ -36,7 +36,7 @@ Fallback without a network: the same plan goes to `Saved/Input/session_plan.json
 ## Rules
 
 - **Versions.** Additive changes bump the minor version; renames or removals bump the major. Readers reject another major and ignore unknown fields. WAH accepts reports from 1.4 (current VR build) on.
-- **One plan per session.** The VR consumes the plan at START and discards it when it writes the report, including partial ones (`HeadsetRemoved`, `OperatorReset`), so the next participant never inherits it.
+- **One plan per session.** The VR consumes the plan at START and discards it when it writes the report, including partial ones (`HeadsetRemoved`, `OperatorReset`, `EarlyReturn`), so the next participant never inherits it.
 - **Privacy.** The learner is a pseudonym (`^[A-Za-z0-9_-]{4,64}$`): never the name or e-mail. Validation errors name the field, never the received value.
 - **Modes.** `study` pins every learner to the `intermediate` preset (the validated build) so behavior is comparable; the level is only recorded. `training` follows `vr.level`. `overrides` exist for testing and calibration and are reported in `scenario_config.overrides_applied`.
 - **No hints.** Presets change the time to decide, how clear the signals are and the feedback after an error. Never a hint before the decision.

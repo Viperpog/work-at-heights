@@ -118,6 +118,7 @@ test('level rule: examples from integration/vr/examples land on the expected row
 test('level rule: the first matching row wins, in the order of the table', () => {
   assert.equal(level(edit(SAFE_14, l => { l.completed = false; l.safety_classification = 'unsafe'; })).level, null, 'row 2 before 3');
   assert.equal(level(edit(SAFE_14, l => { l.end_reason = 'Timeout'; })).rule, 2);
+  assert.equal(level(edit(SAFE_14, l => { l.completed = false; l.end_reason = 'EarlyReturn'; })).rule, 2, 'EarlyReturn is a valid partial report');
   assert.equal(level(edit(SAFE_14, l => { l.verdict = 'incomplete'; })).rule, 2);
   for (const change of [l => { l.safety_classification = 'unsafe'; }, l => { l.verdict = 'critical_risk'; }, l => { l.final_decision = 'continued_inspection_in_rain'; }, l => { l.director.critical_failures = 2; }]) {
     const rated = level(edit(SAFE_14, l => { l.safety_classification = 'partially_safe'; change(l); }));
